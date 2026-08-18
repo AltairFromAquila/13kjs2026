@@ -1,4 +1,4 @@
-import { calculateCatmullRomSpline, calculateSplineSegmentPoint, calculateSplineSegmentTangent, lerp, vec2Dot, vec2New, vec2NewCopy, vec2Normalize, type SplinePoint, type SplineSegment, type Vec2 } from "../math";
+import { calculateCatmullRomSpline, calculateSplineSegmentPoint, calculateSplineSegmentTangent, lerp, vec2Add, vec2Dot, vec2MulScalar, vec2New, vec2NewCopy, vec2Normalize, vec2Sub, type SplinePoint, type SplineSegment, type Vec2 } from "../math";
 
 interface TrackData {
   mainPath: SplinePoint[];
@@ -96,7 +96,7 @@ export function trackDrawTexture(self: Track) {
     segments = self.segments;
   }
 
-  const samples: { pos: Vec2, normal: Vec2, width: number}[] = [];
+  const samples: ({ pos: Vec2, normal: Vec2, width: number } | null)[] = [];
   const segLen = segments.length;
   for (let i = 0; i < segLen; ++i) {
     const cur = segments[i];
@@ -114,18 +114,80 @@ export function trackDrawTexture(self: Track) {
       normal: vec2New(-tan1.y, tan1.x),
       width: cur.w1
     });
+
+    samples.push(null);
   }
 
-  // TODO: Draw texture from samples
+  const ctx = self.textureCtx as OffscreenCanvasRenderingContext2D;
+  const { width: canvasWidth, height: canvasHeight } = self.textureCanvas;
+  ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+  const samplesLen = samples.length;
+  for (let i = 0; i < samplesLen; ++i) {
+    const cur = samples[i];
+    const next = samples[i + 1];
+
+    if (!cur) continue;
+    if (!next) { ++i; continue; }
+
+    const curHalfWidth = cur.width * 0.5;
+    const nextHalfWidth = next.width * 0.5;
+
+    const curLeft: Vec2 = vec2Add(
+      vec2MulScalar(vec2NewCopy(cur.normal), curHalfWidth),
+      cur.pos
+    );
+    const curRight: Vec2 = vec2Add(
+      vec2MulScalar(vec2NewCopy(cur.normal), -curHalfWidth),
+      cur.pos
+    );
+
+    const nextLeft: Vec2 = vec2Add(
+      vec2MulScalar(vec2NewCopy(next.normal), nextHalfWidth),
+      next.pos
+    );
+    const nextRight: Vec2 = vec2Add(
+      vec2MulScalar(vec2NewCopy(next.normal), -nextHalfWidth),
+      next.pos
+    );
+
+    const midPos = vec2MulScalar(vec2Add(vec2NewCopy(cur.pos), next.pos), 0.5);
+    const midNormal = vec2Normalize(
+      vec2New(cur.pos.y - next.pos.y, next.pos.x - cur.pos.x)
+    );
+    const midHalfWidth = 0.25 * (cur.width + next.width);
+    const gradLeft = vec2Add(vec2MulScalar(vec2NewCopy(midNormal), midHalfWidth), midPos);
+    const gradRight = vec2Add(vec2MulScalar(vec2NewCopy(midNormal), -midHalfWidth), midPos);
+
+    const gradient = ctx.createLinearGradient(gradLeft.x, gradLeft.y, gradRight.x, gradRight.y);
+    gradient.addColorStop(0.00, "#f00");
+    gradient.addColorStop(0.17, "#f80");
+    gradient.addColorStop(0.33, "#ff0");
+    gradient.addColorStop(0.50, "#0f0");
+    gradient.addColorStop(0.67, "#00f");
+    gradient.addColorStop(0.83, "#408");
+    gradient.addColorStop(1.00, "#80f");
+
+    ctx.fillStyle = gradient;
+    ctx.strokeStyle = gradient;
+    ctx.beginPath();
+    ctx.moveTo(curLeft.x, curLeft.y);
+    ctx.lineTo(nextLeft.x, nextLeft.y);
+    ctx.lineTo(nextRight.x, nextRight.y);
+    ctx.lineTo(curRight.x, curRight.y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
 }
 
-const kCosThreshold = 0.985;
+const kCosThreshold = 0.999999;
 function sampleTrackSegment(
   segment: SplineSegment,
   t0: number, t1: number,
   tan0: Vec2, tan1: Vec2,
   depth: number,
-  samples: { pos: Vec2, normal: Vec2, width: number}[],
+  samples: ({ pos: Vec2, normal: Vec2, width: number } | null)[],
 ) {
   if (depth > 5) return;
 
