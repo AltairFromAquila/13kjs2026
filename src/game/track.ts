@@ -22,8 +22,8 @@ export class Track {
   segments: SplineSegment[] = [];
   secondaryPaths: SecondaryPath[] = [];
 
-  textureCanvas: OffscreenCanvas = new OffscreenCanvas(2048, 2048);
-  textureCtx: OffscreenRenderingContext = this.textureCanvas.getContext('2d')!;
+  textureCanvas: OffscreenCanvas = new OffscreenCanvas(2048 * 2, 2048 * 2);
+  textureCtx: OffscreenRenderingContext = this.textureCanvas.getContext('2d', { willReadFrequently: true })!;
 }
 
 export function trackCalculateSpline(self: Track, trackData: TrackData) {
@@ -121,6 +121,7 @@ export function trackDrawTexture(self: Track) {
   const ctx = self.textureCtx as OffscreenCanvasRenderingContext2D;
   const { width: canvasWidth, height: canvasHeight } = self.textureCanvas;
   ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+  // ctx.imageSmoothingEnabled = false;
 
   const samplesLen = samples.length;
   for (let i = 0; i < samplesLen; ++i) {
@@ -160,13 +161,13 @@ export function trackDrawTexture(self: Track) {
     const gradRight = vec2Add(vec2MulScalar(vec2NewCopy(midNormal), -midHalfWidth), midPos);
 
     const gradient = ctx.createLinearGradient(gradLeft.x, gradLeft.y, gradRight.x, gradRight.y);
-    gradient.addColorStop(0.00, "#f00");
-    gradient.addColorStop(0.17, "#f80");
-    gradient.addColorStop(0.33, "#ff0");
-    gradient.addColorStop(0.50, "#0f0");
-    gradient.addColorStop(0.67, "#00f");
-    gradient.addColorStop(0.83, "#408");
-    gradient.addColorStop(1.00, "#80f");
+    gradient.addColorStop(0.00, "#f008");
+    gradient.addColorStop(0.17, "#f808");
+    gradient.addColorStop(0.33, "#ff08");
+    gradient.addColorStop(0.50, "#0f08");
+    gradient.addColorStop(0.67, "#00f8");
+    gradient.addColorStop(0.83, "#4088");
+    gradient.addColorStop(1.00, "#80f8");
 
     ctx.fillStyle = gradient;
     ctx.strokeStyle = gradient;
@@ -179,9 +180,57 @@ export function trackDrawTexture(self: Track) {
     ctx.fill();
     ctx.stroke();
   }
+
+  const start = self.segments[0];
+  if (!start) return;
+
+  const startPos = start.d;
+  const startTan = vec2Normalize(vec2NewCopy(start.c));
+  const startNormal = vec2New(-startTan.y, startTan.x);
+
+  const halfSpan = start.w0 * 0.55;
+  const halfThickness = start.w0 * 0.06;
+  const tileCols = start.w0 * 0.3;
+  const tileRows = 3;
+  const tileSpan = (2 * halfSpan) / tileCols;
+  const rowSpan = (2 * halfThickness) / tileRows;
+
+  for (let y = 0; y < tileRows; ++y) {
+    const t0 = -halfThickness + y * rowSpan;
+    const t1 = t0 + rowSpan;
+    for (let x = 0; x < tileCols; ++x) {
+      const n0 = -halfSpan + x * tileSpan;
+      const n1 = n0 + tileSpan;
+
+      const p0 = vec2Add(
+        vec2Add(vec2MulScalar(vec2NewCopy(startNormal), n0), startPos),
+        vec2MulScalar(vec2NewCopy(startTan), t0)
+      );
+      const p1 = vec2Add(
+        vec2Add(vec2MulScalar(vec2NewCopy(startNormal), n1), startPos),
+        vec2MulScalar(vec2NewCopy(startTan), t0)
+      );
+      const p2 = vec2Add(
+        vec2Add(vec2MulScalar(vec2NewCopy(startNormal), n1), startPos),
+        vec2MulScalar(vec2NewCopy(startTan), t1)
+      );
+      const p3 = vec2Add(
+        vec2Add(vec2MulScalar(vec2NewCopy(startNormal), n0), startPos),
+        vec2MulScalar(vec2NewCopy(startTan), t1)
+      );
+
+      ctx.fillStyle = ((x + y) & 1) ? "#000" : "#fff";
+      ctx.beginPath();
+      ctx.moveTo(p0.x, p0.y);
+      ctx.lineTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+      ctx.lineTo(p3.x, p3.y);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
 }
 
-const kCosThreshold = 0.999999;
 function sampleTrackSegment(
   segment: SplineSegment,
   t0: number, t1: number,
@@ -189,9 +238,7 @@ function sampleTrackSegment(
   depth: number,
   samples: ({ pos: Vec2, normal: Vec2, width: number } | null)[],
 ) {
-  if (depth > 5) return;
-
-  if (vec2Dot(tan0, tan1) >= kCosThreshold) return;
+  if (depth > 8) return;
 
   const tMid = 0.5 * (t0 + t1);
   const tanMid = vec2Normalize(calculateSplineSegmentTangent(segment, tMid, vec2New()));

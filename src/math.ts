@@ -19,6 +19,14 @@ export interface SplineSegment {
   w1: number;
 }
 
+export function mod(a: number, b: number) {
+  return ((a % b) + b) % b;
+}
+
+export function clamp(a: number, min: number, max: number) {
+  return (a < min) ? min : (a > max) ? max : a;
+}
+
 export function lerp(a: number, b: number, ratio: number) {
   return a + (b - a) * ratio;
 }
