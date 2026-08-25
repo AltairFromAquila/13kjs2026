@@ -34,11 +34,31 @@ function handleMovementInput(deltaMs: number) {
   const heightDelta = kHeightSpeed * (deltaMs / 1000);
   const pitchDelta = kPitchSpeed * (deltaMs / 1000);
   const turnDelta = kTurnSpeed * (deltaMs / 1000);
+  const yawSin = mathJs.sin(camAngle);
+  const yawCos = mathJs.cos(camAngle);
 
-  if (moveState.forward) camPos.y -= distance;
-  if (moveState.backward) camPos.y += distance;
-  if (moveState.left) camPos.x -= distance;
-  if (moveState.right) camPos.x += distance;
+  // Camera-local basis in world space.
+  const forwardX = yawSin;
+  const forwardY = -yawCos;
+  const rightX = yawCos;
+  const rightY = yawSin;
+
+  if (moveState.forward) {
+    camPos.x += forwardX * distance;
+    camPos.y += forwardY * distance;
+  }
+  if (moveState.backward) {
+    camPos.x -= forwardX * distance;
+    camPos.y -= forwardY * distance;
+  }
+  if (moveState.left) {
+    camPos.x -= rightX * distance;
+    camPos.y -= rightY * distance;
+  }
+  if (moveState.right) {
+    camPos.x += rightX * distance;
+    camPos.y += rightY * distance;
+  }
   if (moveState.heightDown) camHeight -= heightDelta;
   if (moveState.heightUp) camHeight += heightDelta;
   if (moveState.turnLeft) camAngle -= turnDelta;
@@ -179,6 +199,59 @@ const outputData = projectedPlaneCtx.createImageData(canvas.width, canvas.height
 const outputPixels = new Uint32Array(outputData.data.buffer);
 const kMask = (2048 * 2) - 1; // Track texture is always power of two, and mod operator tanks the frame rate
 const kSkyColor = 0xffebce87;
+const kFogFactor = 0.1;
+const kGroundBaseColor = 0xff2b8f2b;
+const kGroundSkyTint = 0.2;
+const kGroundColor = blendAbgr(kGroundBaseColor, kSkyColor, kGroundSkyTint);
+
+function blendAbgr(src: number, dst: number, t: number): number {
+  const invT = 1 - t;
+
+  const srcR = src & 0xff;
+  const srcG = (src >>> 8) & 0xff;
+  const srcB = (src >>> 16) & 0xff;
+  const srcA = (src >>> 24) & 0xff;
+
+  const dstR = dst & 0xff;
+  const dstG = (dst >>> 8) & 0xff;
+  const dstB = (dst >>> 16) & 0xff;
+  const dstA = (dst >>> 24) & 0xff;
+
+  const outR = ((srcR * invT) + (dstR * t)) | 0;
+  const outG = ((srcG * invT) + (dstG * t)) | 0;
+  const outB = ((srcB * invT) + (dstB * t)) | 0;
+  const outA = ((srcA * invT) + (dstA * t)) | 0;
+
+  return (outA << 24) | (outB << 16) | (outG << 8) | outR;
+}
+
+function overAbgr(top: number, bottom: number): number {
+  const topA = (top >>> 24) & 0xff;
+  if (topA === 0xff) return top;
+  if (topA === 0) return bottom;
+
+  const invTopA = 255 - topA;
+
+  const topR = top & 0xff;
+  const topG = (top >>> 8) & 0xff;
+  const topB = (top >>> 16) & 0xff;
+
+  const botR = bottom & 0xff;
+  const botG = (bottom >>> 8) & 0xff;
+  const botB = (bottom >>> 16) & 0xff;
+  const botA = (bottom >>> 24) & 0xff;
+
+  const outR = ((topR * topA) + (botR * invTopA)) / 255;
+  const outG = ((topG * topA) + (botG * invTopA)) / 255;
+  const outB = ((topB * topA) + (botB * invTopA)) / 255;
+  const outA = topA + ((botA * invTopA) / 255);
+
+  return (((outA | 0) & 0xff) << 24)
+    | (((outB | 0) & 0xff) << 16)
+    | (((outG | 0) & 0xff) << 8)
+    | ((outR | 0) & 0xff);
+}
+
 function renderProjectedPlane(a: any) {
   if (!trackPixels) {
     const trackCanvas = a.textureCanvas as OffscreenCanvas;
@@ -208,12 +281,15 @@ function renderProjectedPlane(a: any) {
       continue;
     }
 
-    const t = camHeight / -rayZ;
+    const invZ = 1 / -rayZ;
+    const t = camHeight * invZ;
+    const localY = t * rayY;
+    const linearFogValue = clamp((invZ * kFogFactor) - 1, 0, 1);
+    const fogValue = 1 - (1 - linearFogValue) * (1 - linearFogValue);
 
     for (let i = 0; i < width; ++i) {
       const sx = horTanTable[i];
       const localX = t * sx;
-      const localY = t * rayY;
 
       const worldX = (yawCos * localX) - (yawSin * localY);
       const worldY = (yawSin * localX) + (yawCos * localY);
@@ -224,7 +300,15 @@ function renderProjectedPlane(a: any) {
       const textureIdx = rowOffset + (texX & kMask);
       const outputIdx = (width * outputRow) + i;
 
-      outputPixels[outputIdx] = trackPixels[textureIdx];
+      const trackColor = trackPixels[textureIdx];
+      const groundFogged = (fogValue > 0)
+        ? blendAbgr(kGroundColor, kSkyColor, fogValue)
+        : kGroundColor;
+      const trackFogged = (fogValue > 0)
+        ? blendAbgr(trackColor, kSkyColor, linearFogValue)
+        : trackColor;
+
+      outputPixels[outputIdx] = overAbgr(trackFogged, groundFogged);
     }
   }
 
