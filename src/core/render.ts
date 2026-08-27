@@ -25,9 +25,10 @@ const kPitchSpeed = mathJs.PI * 0.25;
 const kTurnSpeed = mathJs.PI * 0.75;
 const kPitchMaxAbs = mathJs.PI * 0.5;
 const kCamHeightMin = 1;
-const kVerticalFov = mathJs.PI * 0.3;
+const kVerticalFov = mathJs.PI * 0.4;
 const kTau = mathJs.PI * 2;
 let prevInputUpdateTime = performance.now();
+let racerRotation = 0;
 
 function handleMovementInput(deltaMs: number) {
   const distance = kCamSpeed * (deltaMs / 1000);
@@ -166,6 +167,7 @@ export function render(a: any) {
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(projectedPlaneCanvas, 0, 0);
+  renderRacer();
 }
 
 const verTanTable = (() => {
@@ -313,4 +315,423 @@ function renderProjectedPlane(a: any) {
   }
 
   projectedPlaneCtx.putImageData(outputData, 0, 0);
+}
+
+const kVerticalFactor = 0;
+function renderRacer() {
+  type SkeletonNodeShape = {
+    points: [number, number][];
+    z?: number;
+    color?: string;
+  }
+  type SkeletonNode = {
+    pos: [number, number];
+    z: number;
+    radius: number;
+    color?: string;
+    split?: boolean;
+    children?: SkeletonNode[];
+    shapes?: SkeletonNodeShape[];
+  };
+  type TransformedSkeletonNode = {
+    type: 0,
+    pos: [number, number];
+    z: number;
+    color: string;
+    ref: SkeletonNode;
+    parent: SkeletonNode | null;
+  } | ({ type: 1; z: number; } & SkeletonNodeShape);
+
+  const skeleton: SkeletonNode = {
+    pos: [6.2, -11.8], // Root - Pelvis
+    z: 0,
+    radius: 2.4,
+    color: "#faa",
+    children: [
+      {
+        pos: [2.1, -11], // Torso 2
+        z: 0,
+        radius: 2.9,
+        children: [
+          {
+            pos: [-2.3, -11], // Torso 1
+            z: 0,
+            radius: 3,
+            children: [
+              {
+                pos: [-3.4, -12.2], // Neck
+                z: 0,
+                radius: 2,
+                split: true,
+                children: [
+                  {
+                    pos: [-6.8, -16.6], // Head
+                    z: 0,
+                    radius: 1.2,
+                    shapes: [
+                      { // Head
+                        points: [
+                          [-6.8, -15.4],
+                          [-10.7, -14.5],
+                          [-11.5, -15.4],
+                          [-8.3, -17.8],
+                          [-6.8, -17.8],
+                        ]
+                      },
+                      { // Hair
+                        points: [
+                          [-6.8, -17.8],
+                          [-6.5, -18.2],
+                          [-4.8, -17.6],
+                          [-4.1, -17],
+                          [-4.9, -17],
+                          [-2, -15.2],
+                          [-4, -16],
+                          [-1, -13.8],
+                          [-2.5, -13.8],
+                          [-2.5, -13],
+                          [-3.5, -13.8],
+                          [-5, -15.5],
+                          [-5, -14],
+                          [-5.7, -15.5],
+                        ],
+                        z: 3.1,
+                        color: "#ff7"
+                      },
+                      { // Ear 1
+                        points: [
+                          [-6.9, -17.6],
+                          [-8, -17.6],
+                          [-7.8, -19.2],
+                        ],
+                        z: 1.2
+                      },
+                      { // Horn
+                        points: [
+                          [-8.9, -17.4],
+                          [-8.2, -17.8],
+                          [-10.25, -21],
+                        ],
+                        z: -0.01,
+                        color: "#b44"
+                      },
+                      { // Eye 1
+                        points: [
+                          [-8.1, -17],
+                          [-8.4, -16.7],
+                          [-8.1, -16.4],
+                          [-7.8, -16.7],
+                        ],
+                        z: 1.2,
+                        color: "#000"
+                      },
+                    ]
+                  }
+                ]
+              },
+              {
+                pos: [-3.5, -8.8], // Upper front leg
+                z: 1.8,
+                radius: 1.2,
+                split: true,
+                children: [
+                  {
+                    pos: [-3.6, -4.6], // Lower front leg
+                    z: 2.5,
+                    radius: 0.5,
+                    children: [
+                      {
+                        pos: [-3.6, -1.8], // Front hoof
+                        z: 2.5,
+                        radius: 0.5,
+                        shapes: [
+                          {
+                            points: [
+                              [-3.1, -1.8],
+                              [-3.1, 0],
+                              [-4.5, 0],
+                              [-4.1, -1.8],
+                            ],
+                            color: "#b44"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        pos: [7, -10.2], // Upper back leg
+        z: 1.2,
+        radius: 1.8,
+        split: true,
+        children: [
+          {
+            pos: [9, -5.8], // Lower back leg
+            z: 2.4,
+            radius: 0.6,
+            children: [
+              {
+                pos: [9, -1.8], // Back hoof
+                z: 2.5,
+                radius: 0.5,
+                shapes: [
+                  {
+                    points: [
+                      [9.5, -1.8],
+                      [9.5, 0],
+                      [8.1, 0],
+                      [8.5, -1.8],
+                    ],
+                    color: "#b44"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      { // Tail
+        pos: [8.5, -13.2],
+        z: 0,
+        radius: 0.5,
+        color: '#ff0',
+        split: true,
+        children: [
+          {
+            pos: [8.9, -13.5],
+            z: 0,
+            radius: 0.6,
+            children: [
+              {
+                pos: [9.3, -13.2],
+                z: 0,
+                radius: 0.7,
+                children: [
+                  {
+                    pos: [10.5, -9.5],
+                    z: 0,
+                    radius: 0.7,
+                    children: [
+                      {
+                        pos: [11.5, -8],
+                        z: 0,
+                        radius: 0.2,
+                      }
+                    ],
+                  }
+                ],
+              }
+            ],
+          }
+        ],
+      }
+    ]
+  };
+
+  const scale = 12;
+  const offsetX = 160;
+  const offsetY = 400;
+
+  function toScreen(point: [number, number]): [number, number] {
+    return [offsetX + (point[0] * scale), offsetY + (point[1] * scale)];
+  }
+
+  function drawCircle(x: number, y: number, radius: number, color: string) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.arc(x, y, radius, 0, kTau);
+    ctx.fill();
+  }
+
+  function drawBone(
+    ax: number,
+    ay: number,
+    ar: number,
+    bx: number,
+    by: number,
+    br: number,
+    color: string,
+  ) {
+    const dx = bx - ax;
+    const dy = by - ay;
+    const len = mathJs.hypot(dx, dy);
+
+    if (len < 1e-6) {
+      drawCircle(ax, ay, mathJs.max(ar, br), color);
+      return;
+    }
+
+    // Sweep circles along the segment with interpolated radius to create a smooth taper.
+    const avgRadius = (ar + br) * 0.5;
+    const spacing = mathJs.max(0.75, avgRadius * 0.35);
+    const steps = mathJs.max(1, mathJs.ceil(len / spacing));
+
+    for (let i = 0; i <= steps; ++i) {
+      const t = i / steps;
+      const cx = ax + (dx * t);
+      const cy = ay + (dy * t);
+      const cr = ar + ((br - ar) * t);
+
+      drawCircle(cx, cy, cr, color);
+    }
+  }
+
+  function drawSortedShape(shapeNode: Extract<TransformedSkeletonNode, { type: 1 }>, defaultColor: string) {
+    const shape = shapeNode.points;
+    if (!shape || shape.length < 3) return;
+
+    ctx.fillStyle = shapeNode.color ?? defaultColor;
+    ctx.beginPath();
+
+    for (let i = 0; i < shape.length; ++i) {
+      const [px, py] = shape[i];
+      const [sx, sy] = toScreen([px, py]);
+
+      if (i === 0) {
+        ctx.moveTo(sx, sy);
+      } else {
+        ctx.lineTo(sx, sy);
+      }
+    }
+
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function drawSkeleton(nodeSet: TransformedSkeletonNode[], defaultColor = "#454545") {
+    for (const transformedNode of nodeSet) {
+      if (transformedNode.type === 1) {
+        drawSortedShape(transformedNode, defaultColor);
+        continue;
+      }
+
+      const node = transformedNode.ref;
+      const parent = transformedNode.parent;
+      const nodeColor = transformedNode.color || defaultColor;
+
+      const [x, y] = toScreen(node.pos);
+      const radius = node.radius * scale;
+
+      if (parent && !node.split) {
+        const [px, py] = toScreen(parent.pos);
+        drawBone(px, py, parent.radius * scale, x, y, radius, nodeColor);
+      }
+
+      // Always draw the joint circle so branches/splits merge as a solid silhouette.
+      drawCircle(x, y, radius, nodeColor);
+
+      // Shapes are drawn as type-1 entries from the sorted set.
+    }
+  }
+
+  function sortNode(
+    node: SkeletonNode,
+    parent: SkeletonNode | null,
+    nodeSet: TransformedSkeletonNode[],
+    inheritedColor = "#454545",
+  ) {
+    function insertSorted(nodeItem: TransformedSkeletonNode) {
+      let insertIdx = nodeSet.length;
+      for (let i = 0; i < nodeSet.length; ++i) {
+        if (nodeItem.z < nodeSet[i].z) {
+          insertIdx = i;
+          break;
+        }
+      }
+
+      nodeSet.splice(insertIdx, 0, nodeItem);
+    }
+
+    const nodeColor = node.color ?? inheritedColor;
+    const transformedNode: TransformedSkeletonNode = {
+      type: 0,
+      pos: node.pos,
+      z: node.z + node.radius,
+      color: nodeColor,
+      ref: node,
+      parent: parent,
+    };
+
+    insertSorted(transformedNode);
+
+    for (const shape of node.shapes ?? []) {
+      const transformedShape: TransformedSkeletonNode = {
+        color: nodeColor,
+        ...shape,
+        type: 1,
+        z: node.z + (shape.z ?? 0),
+      };
+      insertSorted(transformedShape);
+    }
+
+    for (const child of node.children ?? []) {
+      sortNode(child, node, nodeSet, nodeColor);
+    }
+  }
+
+  function getSortedNodes(skeleton: SkeletonNode) {
+    const nodeSet: TransformedSkeletonNode[] = [];
+
+    sortNode(skeleton, null, nodeSet);
+
+    return nodeSet;
+  }
+
+  ctx.save();
+  ctx.globalCompositeOperation = "source-over";
+  drawSkeleton(getSortedNodes(skeleton));
+  // let xoff = 0;
+  // let yoff = 0;
+
+  // Torso
+  // ctx.moveTo(85 + xoff, 104 + yoff);
+  // ctx.bezierCurveTo(102 + xoff, 118 + yoff, 150 + xoff, 122 + yoff, 165 + xoff, 122 + yoff);
+  // ctx.bezierCurveTo(195 + xoff, 122 + yoff, 263 + xoff, 110 + yoff, 281 + xoff, 105 + yoff);
+  // ctx.bezierCurveTo(295 + xoff, 101 + yoff, 334 + xoff, 90 + yoff, 357 + xoff, 91 + yoff);
+  // ctx.bezierCurveTo(379 + xoff, 92 + yoff, 408 + xoff, 110 + yoff, 413 + xoff, 125 + yoff);
+  // ctx.bezierCurveTo(419 + xoff, 144 + yoff, 414 + xoff, 165 + yoff, 404 + xoff, 184 + yoff);
+  // ctx.bezierCurveTo(397 + xoff, 197 + yoff, 351 + xoff, 219 + yoff, 327 + xoff, 224 + yoff);
+  // ctx.bezierCurveTo(301 + xoff, 229 + yoff, 257 + xoff, 250 + yoff, 232 + xoff, 261 + yoff);
+  // ctx.bezierCurveTo(213 + xoff, 269 + yoff, 173 + xoff, 277 + yoff, 142 + xoff, 271 + yoff);
+  // ctx.bezierCurveTo(117 + xoff, 266 + yoff, 87 + xoff, 251 + yoff, 77 + xoff, 240 + yoff);
+  // ctx.bezierCurveTo(67 + xoff, 229 + yoff, 51 + xoff, 209 + yoff, 46 + xoff, 196 + yoff);
+  // ctx.bezierCurveTo(41 + xoff, 182 + yoff, 32 + xoff, 145 + yoff, 36 + xoff, 125 + yoff);
+  // ctx.fill();
+
+  // Upper back leg
+  // Start a new path so the second fill does not affect the first shape.
+  // xoff = 210;
+  // yoff = 60;
+  // ctx.beginPath();
+  // ctx.fillStyle = '#f00';
+  // ctx.moveTo(118 + xoff, 116 + yoff);
+  // ctx.bezierCurveTo(115 + xoff, 132 + yoff, 125 + xoff, 158 + yoff, 135 + xoff, 184 + yoff);
+  // ctx.bezierCurveTo(140 + xoff, 198 + yoff, 152 + xoff, 218 + yoff, 162 + xoff, 230 + yoff);
+  // ctx.bezierCurveTo(172 + xoff, 242 + yoff, 185 + xoff, 254 + yoff, 197 + xoff, 263 + yoff);
+  // ctx.bezierCurveTo(209 + xoff, 272 + yoff, 230 + xoff, 268 + yoff, 230 + xoff, 263 + yoff);
+  // ctx.bezierCurveTo(231 + xoff, 250 + yoff, 224 + xoff, 230 + yoff, 218 + xoff, 219 + yoff);
+  // ctx.bezierCurveTo(211 + xoff, 206 + yoff, 206 + xoff, 183 + yoff, 205 + xoff, 162 + yoff);
+  // ctx.bezierCurveTo(204 + xoff, 147 + yoff, 205 + xoff, 123 + yoff, 205 + xoff, 111 + yoff);
+  // ctx.bezierCurveTo(205 + xoff, 95 + yoff, 183 + xoff, 83 + yoff, 167 + xoff, 76 + yoff);
+  // ctx.bezierCurveTo(153 + xoff, 70 + yoff, 135 + xoff, 80 + yoff, 125 + xoff, 93 + yoff);
+  // ctx.fill();
+
+  // Lower back leg
+  // xoff = 415;
+  // yoff = 310;
+  // ctx.beginPath();
+  // ctx.fillStyle = '#f88';
+  // ctx.lineTo(0 + xoff, 0 + yoff);
+  // ctx.lineTo(0 + xoff, 150 + yoff);
+  // ctx.lineTo(20 + xoff, 150 + yoff);
+  // ctx.lineTo(20 + xoff, 0 + yoff);
+  // ctx.fill();
+  
+  ctx.restore();
 }
