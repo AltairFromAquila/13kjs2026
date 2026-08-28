@@ -28,7 +28,7 @@ const kCamHeightMin = 1;
 const kVerticalFov = mathJs.PI * 0.4;
 const kTau = mathJs.PI * 2;
 let prevInputUpdateTime = performance.now();
-let racerRotation = mathJs.PI * -0.5;
+let racerRotation = mathJs.PI * 0;
 
 function handleMovementInput(deltaMs: number) {
   const distance = kCamSpeed * (deltaMs / 1000);
@@ -323,17 +323,27 @@ function renderProjectedPlane(a: any) {
   projectedPlaneCtx.putImageData(outputData, 0, 0);
 }
 
-const kVerticalFactor = 1;
+const kVerticalFactor = 0.5;
 function renderRacer() {
   type SkeletonNodeShape = {
     points: [number, number][];
+    front?: {
+      points: [number, number][];
+      z?: number;
+    };
+    back?: {
+      points: [number, number][];
+      z?: number;
+    };
     z?: number;
+    useParentDepth?: boolean;
     color?: string;
   }
   type SkeletonNode = {
     pos: [number, number];
     z: number;
     radius: number;
+    depthOffset?: number;
     color?: string;
     split?: boolean;
     children?: SkeletonNode[];
@@ -374,88 +384,316 @@ function renderRacer() {
                     pos: [-6.8, -16.6], // Head
                     z: 0,
                     radius: 1.2,
-                    // children: [
-                    //   {
-                    //     pos: [-10, -15], // Mouth
-                    //     z: 0,
-                    //     radius: 0.7,
-                    //   }
-                    // ],
+                    children: [
+                      {
+                        pos: [-10, -15], // Mouth
+                        z: 0,
+                        radius: 0.7,
+                        split: true,
+                      },
+                      {
+                        pos: [-8.1, -16.7], // Eye 1
+                        z: 0.8,
+                        radius: 0.3,
+                        split: true,
+                        depthOffset: 1.8,
+                        color: "#000"
+                      },
+                      {
+                        pos: [-8.1, -16.7], // Eye 2
+                        z: -0.8,
+                        radius: 0.3,
+                        split: true,
+                        color: "#000"
+                      },
+                      {
+                        pos: [-8.55, -17.6], // Horn
+                        z: 0,
+                        radius: 0.35,
+                        split: true,
+                        color: "#b44",
+                        depthOffset: -1,
+                        children: [
+                          {
+                            pos: [-10.25, -21], // Horn Tip
+                            z: 0,
+                            radius: 0,
+                          }
+                        ]
+                      },
+                      {
+                        pos: [-7.5, -17.4], // Ear
+                        z: 0.5,
+                        radius: 0.4,
+                        split: true,
+                        depthOffset: -1,
+                        children: [
+                          {
+                            pos: [-7.8, -19.2], // Ear Tip
+                            z: 0.8,
+                            radius: 0,
+                          }
+                        ]
+                      },
+                      {
+                        pos: [-7.5, -17.4], // Ear
+                        z: -0.5,
+                        radius: 0.4,
+                        split: true,
+                        depthOffset: -1,
+                        children: [
+                          {
+                            pos: [-7.8, -19.2], // Ear Tip
+                            z: -0.8,
+                            radius: 0,
+                          }
+                        ]
+                      },
+                      {
+                        pos: [-7.5, -17.5], // Hair 1
+                        z: 0,
+                        radius: 0.4,
+                        split: true,
+                        color: "#ff7",
+                        children: [
+                          {
+                            pos: [-7, -18],
+                            z: 0,
+                            radius: 0.2,
+                            children: [
+                              {
+                                pos: [-4, -17.5],
+                                z: 0,
+                                radius: 0,
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        pos: [-6, -17.5], // Hair 2
+                        z: 0.6,
+                        radius: 0.4,
+                        split: true,
+                        color: "#ff0",
+                        depthOffset: 0.25,
+                        children: [
+                          {
+                            pos: [-5, -16],
+                            z: 1,
+                            radius: 0,
+                            depthOffset: 1,
+                          }
+                        ]
+                      },
+                      {
+                        pos: [-6, -17.5], // Hair 3
+                        z: -0.6,
+                        radius: 0.4,
+                        split: true,
+                        color: "#ff0",
+                        children: [
+                          {
+                            pos: [-5, -16],
+                            z: -1,
+                            radius: 0,
+                          }
+                        ]
+                      },
+                      {
+                        pos: [-6, -17.5], // Hair 4
+                        z: 0,
+                        radius: 0.5,
+                        split: true,
+                        color: "#ff7",
+                        children: [
+                          {
+                            pos: [-2, -15],
+                            z: 0,
+                            depthOffset: 0.25,
+                            radius: 0,
+                          }
+                        ]
+                      },
+                      {
+                        pos: [-5, -16.75], // Hair 5
+                        z: 0.6,
+                        radius: 0.4,
+                        split: true,
+                        color: "#ff0",
+                        depthOffset: 0.3,
+                        children: [
+                          {
+                            pos: [-3.5, -15],
+                            z: 1.2,
+                            radius: 0,
+                            depthOffset: 1,
+                          }
+                        ]
+                      },
+                      {
+                        pos: [-5, -16.75], // Hair 6
+                        z: -0.6,
+                        radius: 0.4,
+                        split: true,
+                        color: "#ff0",
+                        children: [
+                          {
+                            pos: [-3.5, -15],
+                            z: -1.2,
+                            radius: 0,
+                          }
+                        ]
+                      },
+                      {
+                        pos: [-5, -16.5], // Hair 7
+                        z: 0,
+                        radius: 0.4,
+                        split: true,
+                        color: "#ff7",
+                        children: [
+                          {
+                            pos: [-1.5, -13.75],
+                            z: 0,
+                            depthOffset: 0.5,
+                            radius: 0,
+                          }
+                        ]
+                      },
+                      {
+                        pos: [-4.25, -16], // Hair 8
+                        z: 0.6,
+                        radius: 0.3,
+                        split: true,
+                        color: "#ff0",
+                        depthOffset: 0.3,
+                        children: [
+                          {
+                            pos: [-2.5, -14],
+                            z: 0.8,
+                            radius: 0,
+                            depthOffset: 1,
+                          }
+                        ]
+                      },
+                      {
+                        pos: [-4.25, -16], // Hair 9
+                        z: -0.6,
+                        radius: 0.3,
+                        split: true,
+                        color: "#ff0",
+                        children: [
+                          {
+                            pos: [-2.5, -14],
+                            z: -0.8,
+                            radius: 0,
+                          }
+                        ]
+                      },
+                    ],
                     shapes: [
                       { // Head
                         points: [
                           [-6.8, -15.4],
                           [-10.7, -14.5],
+                          [-10.7, -14.5],
                           [-11.5, -15.4],
                           [-8.3, -17.8],
                           [-6.8, -17.8],
-                        ]
-                      },
-                      { // Hair
-                        points: [
-                          [-6.8, -17.8],
-                          [-6.5, -18.2],
-                          [-4.8, -17.6],
-                          [-4.1, -17],
-                          [-4.9, -17],
-                          [-2, -15.2],
-                          [-4, -16],
-                          [-1, -13.8],
-                          [-2.5, -13.8],
-                          [-2.5, -13],
-                          [-3.5, -13.8],
-                          [-5, -15.5],
-                          [-5, -14],
-                          [-5.7, -15.5],
                         ],
-                        z: 3.1,
-                        color: "#ff7"
+                        useParentDepth: true,
+                        // front: {
+                        //   points: [
+                        //     [-5.6, -16.6],
+                        //     [-5.6, -14],
+                        //     [-7.6, -14],
+                        //     [-7.6, -14],
+                        //     [-8, -16.6],
+                        //     [-8, -16.6],
+                        //   ]
+                        // },
                       },
-                      { // Ear 1
-                        points: [
-                          [-6.9, -17.6],
-                          [-8, -17.6],
-                          [-7.8, -19.2],
-                        ],
-                        z: 1.2
-                      },
-                      { // Horn
-                        points: [
-                          [-8.9, -17.4],
-                          [-8.2, -17.8],
-                          [-10.25, -21],
-                        ],
-                        z: -0.01,
-                        color: "#b44"
-                      },
-                      { // Eye 1
-                        points: [
-                          [-8.1, -17],
-                          [-8.4, -16.7],
-                          [-8.1, -16.4],
-                          [-7.8, -16.7],
-                        ],
-                        z: 1.2,
-                        color: "#000"
-                      },
+                      // { // Hair
+                      //   points: [
+                      //     [-6.8, -17.8],
+                      //     [-6.5, -18.2],
+                      //     [-4.8, -17.6],
+                      //     [-4.1, -17],
+                      //     [-4.9, -17],
+                      //     [-2, -15.2],
+                      //     [-4, -16],
+                      //     [-1, -13.8],
+                      //     [-2.5, -13.8],
+                      //     [-2.5, -13],
+                      //     [-3.5, -13.8],
+                      //     [-5, -15.5],
+                      //     [-5, -14],
+                      //     [-5.7, -15.5],
+                      //   ],
+                      //   z: 3.1,
+                      //   color: "#ff7"
+                      // },
+                      // { // Ear 1
+                      //   points: [
+                      //     [-6.9, -17.6],
+                      //     [-8, -17.6],
+                      //     [-7.8, -19.2],
+                      //   ],
+                      //   z: 1.2
+                      // },
+                      // { // Horn
+                      //   points: [
+                      //     [-8.9, -17.4],
+                      //     [-8.2, -17.8],
+                      //     [-10.25, -21],
+                      //   ],
+                      //   z: -0.01,
+                      //   color: "#b44",
+                      //   front: {
+                      //     points: [
+                      //       [-7.15, -17.4],
+                      //       [-6.45, -17.4],
+                      //       [-6.8, -21],
+                      //     ],
+                      //     z: 4
+                      //   },
+                      //   back: {
+                      //     points: [
+                      //       [-7.2, -17.4],
+                      //       [-6.4, -17.4],
+                      //       [-6.8, -21],
+                      //     ],
+                      //     z: -4
+                      //   },
+                      // },
+                      // { // Eye 1
+                      //   points: [
+                      //     [-8.1, -17],
+                      //     [-8.4, -16.7],
+                      //     [-8.1, -16.4],
+                      //     [-7.8, -16.7],
+                      //   ],
+                      //   z: 1.2,
+                      //   color: "#000"
+                      // },
                     ]
                   }
                 ]
               },
               {
-                pos: [-3.5, -8.8], // Upper front leg
+                pos: [-3.5, -9], // Upper front leg
                 z: 1.8,
-                radius: 1.2,
+                radius: 1,
                 split: true,
                 children: [
                   {
                     pos: [-3.6, -4.6], // Lower front leg
-                    z: 2.5,
+                    z: 2,
                     radius: 0.5,
                     children: [
                       {
                         pos: [-3.6, -1.8], // Front hoof
-                        z: 2.5,
+                        z: 2,
                         radius: 0.5,
                         shapes: [
                           {
@@ -465,7 +703,70 @@ function renderRacer() {
                               [-4.5, 0],
                               [-4.1, -1.8],
                             ],
-                            color: "#b44"
+                            color: "#b44",
+                            front: {
+                              points: [
+                                [-3.1, -1.8],
+                                [-3.1, 0],
+                                [-4.1, 0],
+                                [-4.1, -1.8],
+                              ]
+                            },
+                            back: {
+                              points: [
+                                [-3.1, -1.8],
+                                [-3.1, 0],
+                                [-4.1, 0],
+                                [-4.1, -1.8],
+                              ]
+                            },
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                pos: [-3.5, -9], // Upper front leg
+                z: -1.8,
+                radius: 1,
+                split: true,
+                children: [
+                  {
+                    pos: [-3.6, -4.6], // Lower front leg
+                    z: -2,
+                    radius: 0.5,
+                    children: [
+                      {
+                        pos: [-3.6, -1.8], // Front hoof
+                        z: -2,
+                        radius: 0.5,
+                        shapes: [
+                          {
+                            points: [
+                              [-3.1, -1.8],
+                              [-3.1, 0],
+                              [-4.5, 0],
+                              [-4.1, -1.8],
+                            ],
+                            color: "#b44",
+                            front: {
+                              points: [
+                                [-3.1, -1.8],
+                                [-3.1, 0],
+                                [-4.1, 0],
+                                [-4.1, -1.8],
+                              ]
+                            },
+                            back: {
+                              points: [
+                                [-3.1, -1.8],
+                                [-3.1, 0],
+                                [-4.1, 0],
+                                [-4.1, -1.8],
+                              ]
+                            },
                           }
                         ]
                       }
@@ -500,7 +801,70 @@ function renderRacer() {
                       [8.1, 0],
                       [8.5, -1.8],
                     ],
-                    color: "#b44"
+                    color: "#b44",
+                    front: {
+                      points: [
+                        [9.5, -1.8],
+                        [9.5, 0],
+                        [8.5, 0],
+                        [8.5, -1.8],
+                      ]
+                    },
+                    back: {
+                      points: [
+                        [9.5, -1.8],
+                        [9.5, 0],
+                        [8.5, 0],
+                        [8.5, -1.8],
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        pos: [7, -10.2], // Upper back leg
+        z: -1.2,
+        radius: 1.8,
+        split: true,
+        children: [
+          {
+            pos: [9, -5.8], // Lower back leg
+            z: -2.4,
+            radius: 0.6,
+            children: [
+              {
+                pos: [9, -1.8], // Back hoof
+                z: -2.5,
+                radius: 0.5,
+                shapes: [
+                  {
+                    points: [
+                      [9.5, -1.8],
+                      [9.5, 0],
+                      [8.1, 0],
+                      [8.5, -1.8],
+                    ],
+                    color: "#b44",
+                    front: {
+                      points: [
+                        [9.5, -1.8],
+                        [9.5, 0],
+                        [8.5, 0],
+                        [8.5, -1.8],
+                      ]
+                    },
+                    back: {
+                      points: [
+                        [9.5, -1.8],
+                        [9.5, 0],
+                        [8.5, 0],
+                        [8.5, -1.8],
+                      ]
+                    }
                   }
                 ]
               }
@@ -661,10 +1025,13 @@ function renderRacer() {
     const rotCos = mathJs.cos(racerRotation);
 
     function applyYawTransform(x: number, y: number, z: number) {
+      const animX = x;
+      const animY = y;
+      
       // Pseudo-3D yaw: collapse x by cos, offset x by depth, and shift y by signed x.
-      const transformedX = (x * rotCos) - (z * (1 - rotCos));
-      const transformedY = y + (rotSin * kVerticalFactor * mathJs.sign(x));
-      const transformedZ = (z * rotCos) + (x * rotSin);
+      const transformedX = (animX * rotCos) - (z * rotSin);
+      const transformedY = animY + (rotSin * kVerticalFactor * mathJs.sign(animX));
+      const transformedZ = (z * rotCos) + (animX * rotSin);
 
       return {
         x: transformedX,
@@ -690,7 +1057,7 @@ function renderRacer() {
     const transformedNode: TransformedSkeletonNode = {
       type: 0,
       pos: [transformedCenter.x, transformedCenter.y],
-      z: transformedCenter.z + node.radius,
+      z: transformedCenter.z + node.radius + (node.depthOffset ?? 0),
       color: nodeColor,
       ref: node,
       parent: parent,
@@ -701,17 +1068,45 @@ function renderRacer() {
     for (const shape of node.shapes ?? []) {
       const baseShapeZ = node.z + (shape.z ?? 0);
       const transformedShapeOrigin = applyYawTransform(node.pos[0], node.pos[1], baseShapeZ);
-      const transformedPoints: [number, number][] = shape.points.map(([px, py]) => {
+      const defaultPoints: [number, number][] = shape.points.map(([px, py]) => {
         const rotatedPoint = applyYawTransform(px, py, baseShapeZ);
         return [rotatedPoint.x, rotatedPoint.y];
       });
+
+      let transformedPoints = defaultPoints;
+      let transformedShapeZ = transformedShapeOrigin.z;
+
+      const morphValue = mathJs.max(-1, mathJs.min(1, rotSin));
+      const target = (morphValue >= 0) ? shape.back : shape.front;
+      const morphAmount = mathJs.abs(morphValue);
+
+      if (target && target.points.length === shape.points.length && morphAmount > 0) {
+        const targetOrigin = applyYawTransform(node.pos[0], node.pos[1], node.z);
+        targetOrigin.z += (target.z ?? 0);
+
+        // Front/back targets are billboarded: preserve local XY offsets in screen space.
+        const billboardTargetPoints: [number, number][] = target.points.map(([px, py]) => [
+          targetOrigin.x + (px - node.pos[0]),
+          targetOrigin.y + (py - node.pos[1]),
+        ]);
+
+        transformedPoints = defaultPoints.map((point, idx) => {
+          const targetPoint = billboardTargetPoints[idx];
+          return [
+            point[0] + ((targetPoint[0] - point[0]) * morphAmount),
+            point[1] + ((targetPoint[1] - point[1]) * morphAmount),
+          ];
+        });
+
+        transformedShapeZ = transformedShapeOrigin.z + ((targetOrigin.z - transformedShapeOrigin.z) * morphAmount);
+      }
 
       const transformedShape: TransformedSkeletonNode = {
         color: nodeColor,
         ...shape,
         points: transformedPoints,
         type: 1,
-        z: transformedShapeOrigin.z,
+        z: shape.useParentDepth ? transformedNode.z : transformedShapeZ,
       };
       insertSorted(transformedShape);
     }
