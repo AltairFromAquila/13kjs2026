@@ -28,7 +28,7 @@ const kCamHeightMin = 1;
 const kVerticalFov = mathJs.PI * 0.4;
 const kTau = mathJs.PI * 2;
 let prevInputUpdateTime = performance.now();
-let racerRotation = 0;
+let racerRotation = mathJs.PI * -0.5;
 
 function handleMovementInput(deltaMs: number) {
   const distance = kCamSpeed * (deltaMs / 1000);
@@ -161,9 +161,15 @@ const projectedPlaneCtx: OffscreenCanvasRenderingContext2D = projectedPlaneCanva
 export function render(a: any) {
   const now = performance.now();
   handleMovementInput(now - prevInputUpdateTime);
+  // racerRotation += (now - prevInputUpdateTime) * 0.001;
   prevInputUpdateTime = now;
 
   renderProjectedPlane(a);
+
+  const rotationOff = (mathJs.PI * 0.5) - racerRotation;
+  if (rotationOff < 0) {
+    racerRotation = -((mathJs.PI * 0.5) + rotationOff);
+  }
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(projectedPlaneCanvas, 0, 0);
@@ -317,7 +323,7 @@ function renderProjectedPlane(a: any) {
   projectedPlaneCtx.putImageData(outputData, 0, 0);
 }
 
-const kVerticalFactor = 0;
+const kVerticalFactor = 1;
 function renderRacer() {
   type SkeletonNodeShape = {
     points: [number, number][];
@@ -368,6 +374,13 @@ function renderRacer() {
                     pos: [-6.8, -16.6], // Head
                     z: 0,
                     radius: 1.2,
+                    // children: [
+                    //   {
+                    //     pos: [-10, -15], // Mouth
+                    //     z: 0,
+                    //     radius: 0.7,
+                    //   }
+                    // ],
                     shapes: [
                       { // Head
                         points: [
@@ -605,6 +618,13 @@ function renderRacer() {
   }
 
   function drawSkeleton(nodeSet: TransformedSkeletonNode[], defaultColor = "#454545") {
+    const transformedPosByNode = new Map<SkeletonNode, [number, number]>();
+    for (const transformedNode of nodeSet) {
+      if (transformedNode.type === 0) {
+        transformedPosByNode.set(transformedNode.ref, transformedNode.pos);
+      }
+    }
+
     for (const transformedNode of nodeSet) {
       if (transformedNode.type === 1) {
         drawSortedShape(transformedNode, defaultColor);
@@ -615,11 +635,12 @@ function renderRacer() {
       const parent = transformedNode.parent;
       const nodeColor = transformedNode.color || defaultColor;
 
-      const [x, y] = toScreen(node.pos);
+      const [x, y] = toScreen(transformedNode.pos);
       const radius = node.radius * scale;
 
       if (parent && !node.split) {
-        const [px, py] = toScreen(parent.pos);
+        const parentPos = transformedPosByNode.get(parent) ?? parent.pos;
+        const [px, py] = toScreen(parentPos);
         drawBone(px, py, parent.radius * scale, x, y, radius, nodeColor);
       }
 
@@ -636,6 +657,22 @@ function renderRacer() {
     nodeSet: TransformedSkeletonNode[],
     inheritedColor = "#454545",
   ) {
+    const rotSin = mathJs.sin(racerRotation);
+    const rotCos = mathJs.cos(racerRotation);
+
+    function applyYawTransform(x: number, y: number, z: number) {
+      // Pseudo-3D yaw: collapse x by cos, offset x by depth, and shift y by signed x.
+      const transformedX = (x * rotCos) - (z * (1 - rotCos));
+      const transformedY = y + (rotSin * kVerticalFactor * mathJs.sign(x));
+      const transformedZ = (z * rotCos) + (x * rotSin);
+
+      return {
+        x: transformedX,
+        y: transformedY,
+        z: transformedZ,
+      };
+    }
+
     function insertSorted(nodeItem: TransformedSkeletonNode) {
       let insertIdx = nodeSet.length;
       for (let i = 0; i < nodeSet.length; ++i) {
@@ -649,10 +686,11 @@ function renderRacer() {
     }
 
     const nodeColor = node.color ?? inheritedColor;
+    const transformedCenter = applyYawTransform(node.pos[0], node.pos[1], node.z);
     const transformedNode: TransformedSkeletonNode = {
       type: 0,
-      pos: node.pos,
-      z: node.z + node.radius,
+      pos: [transformedCenter.x, transformedCenter.y],
+      z: transformedCenter.z + node.radius,
       color: nodeColor,
       ref: node,
       parent: parent,
@@ -661,11 +699,19 @@ function renderRacer() {
     insertSorted(transformedNode);
 
     for (const shape of node.shapes ?? []) {
+      const baseShapeZ = node.z + (shape.z ?? 0);
+      const transformedShapeOrigin = applyYawTransform(node.pos[0], node.pos[1], baseShapeZ);
+      const transformedPoints: [number, number][] = shape.points.map(([px, py]) => {
+        const rotatedPoint = applyYawTransform(px, py, baseShapeZ);
+        return [rotatedPoint.x, rotatedPoint.y];
+      });
+
       const transformedShape: TransformedSkeletonNode = {
         color: nodeColor,
         ...shape,
+        points: transformedPoints,
         type: 1,
-        z: node.z + (shape.z ?? 0),
+        z: transformedShapeOrigin.z,
       };
       insertSorted(transformedShape);
     }
@@ -732,6 +778,6 @@ function renderRacer() {
   // ctx.lineTo(20 + xoff, 150 + yoff);
   // ctx.lineTo(20 + xoff, 0 + yoff);
   // ctx.fill();
-  
+
   ctx.restore();
 }
