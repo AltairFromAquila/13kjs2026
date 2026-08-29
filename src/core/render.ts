@@ -1,3 +1,4 @@
+import { easeInOutQuad, easeInOutSine, easeInQuad, easeInSine, easeOutQuad, easeOutSine } from "../easing";
 import { clamp, mathJs, vec2New } from "../math";
 import { canvas, ctx } from "../sys/context";
 
@@ -6,6 +7,16 @@ const camPos = vec2New();
 let camHeight = 500;
 let camAngle = 0;
 let camPitch = 0;
+
+const easingFunctions = [
+  (x: number) => x,
+  easeInSine,
+  easeOutSine,
+  easeInOutSine,
+  easeInQuad,
+  easeOutQuad,
+  easeInOutQuad
+];
 
 const moveState = {
   forward: false,
@@ -29,6 +40,7 @@ const kVerticalFov = mathJs.PI * 0.4;
 const kTau = mathJs.PI * 2;
 let prevInputUpdateTime = performance.now();
 let racerRotation = mathJs.PI * 0;
+let animationTime = 0;
 
 function handleMovementInput(deltaMs: number) {
   const distance = kCamSpeed * (deltaMs / 1000);
@@ -161,7 +173,8 @@ const projectedPlaneCtx: OffscreenCanvasRenderingContext2D = projectedPlaneCanva
 export function render(a: any) {
   const now = performance.now();
   handleMovementInput(now - prevInputUpdateTime);
-  // racerRotation += (now - prevInputUpdateTime) * 0.001;
+  racerRotation += (now - prevInputUpdateTime) * 0.001;
+  animationTime = (animationTime + (now - prevInputUpdateTime) * 0.0005) % 1.0;
   prevInputUpdateTime = now;
 
   renderProjectedPlane(a);
@@ -356,7 +369,16 @@ function renderRacer() {
     color: string;
     ref: SkeletonNode;
     parent: SkeletonNode | null;
-  } | ({ type: 1; z: number; } & SkeletonNodeShape);
+  };
+  type TransformedSkeletonPart = TransformedSkeletonNode | ({ type: 1; z: number; } & SkeletonNodeShape);
+  type AnimationFrames = {
+    [patId: number]: AnimationKeyFrame[];
+  }
+  type AnimationKeyFrame = {
+    angle: number;
+    duration: number;
+    easing: number;
+  };
 
   const skeleton: SkeletonNode = {
     pos: [6.2, -11.8], // Root - Pelvis
@@ -602,80 +624,7 @@ function renderRacer() {
                           [-6.8, -17.8],
                         ],
                         useParentDepth: true,
-                        // front: {
-                        //   points: [
-                        //     [-5.6, -16.6],
-                        //     [-5.6, -14],
-                        //     [-7.6, -14],
-                        //     [-7.6, -14],
-                        //     [-8, -16.6],
-                        //     [-8, -16.6],
-                        //   ]
-                        // },
                       },
-                      // { // Hair
-                      //   points: [
-                      //     [-6.8, -17.8],
-                      //     [-6.5, -18.2],
-                      //     [-4.8, -17.6],
-                      //     [-4.1, -17],
-                      //     [-4.9, -17],
-                      //     [-2, -15.2],
-                      //     [-4, -16],
-                      //     [-1, -13.8],
-                      //     [-2.5, -13.8],
-                      //     [-2.5, -13],
-                      //     [-3.5, -13.8],
-                      //     [-5, -15.5],
-                      //     [-5, -14],
-                      //     [-5.7, -15.5],
-                      //   ],
-                      //   z: 3.1,
-                      //   color: "#ff7"
-                      // },
-                      // { // Ear 1
-                      //   points: [
-                      //     [-6.9, -17.6],
-                      //     [-8, -17.6],
-                      //     [-7.8, -19.2],
-                      //   ],
-                      //   z: 1.2
-                      // },
-                      // { // Horn
-                      //   points: [
-                      //     [-8.9, -17.4],
-                      //     [-8.2, -17.8],
-                      //     [-10.25, -21],
-                      //   ],
-                      //   z: -0.01,
-                      //   color: "#b44",
-                      //   front: {
-                      //     points: [
-                      //       [-7.15, -17.4],
-                      //       [-6.45, -17.4],
-                      //       [-6.8, -21],
-                      //     ],
-                      //     z: 4
-                      //   },
-                      //   back: {
-                      //     points: [
-                      //       [-7.2, -17.4],
-                      //       [-6.4, -17.4],
-                      //       [-6.8, -21],
-                      //     ],
-                      //     z: -4
-                      //   },
-                      // },
-                      // { // Eye 1
-                      //   points: [
-                      //     [-8.1, -17],
-                      //     [-8.4, -16.7],
-                      //     [-8.1, -16.4],
-                      //     [-7.8, -16.7],
-                      //   ],
-                      //   z: 1.2,
-                      //   color: "#000"
-                      // },
                     ]
                   }
                 ]
@@ -909,6 +858,168 @@ function renderRacer() {
       }
     ]
   };
+  const animations: AnimationFrames[] = [
+    {}, // Base pose
+    {   // Staing still
+      4: [
+        {
+          angle: 0.025,
+          duration: 0.5,
+          easing: 6
+        },
+        {
+          angle: -0.025,
+          duration: 0.5,
+          easing: 6
+        },
+      ]
+    },
+    {   // Walking
+      4: [
+        {
+          angle: 0.025,
+          duration: 0.5,
+          easing: 6
+        },
+        {
+          angle: -0.025,
+          duration: 0.5,
+          easing: 6
+        },
+      ],
+      34: [
+        {
+          angle: 0.1,
+          duration: 0.5,
+          easing: 6
+        },
+        {
+          angle: -0.1,
+          duration: 0.5,
+          easing: 6
+        },
+      ],
+      35: [
+        {
+          angle: 0,
+          duration: 0.3,
+          easing: 0
+        },
+        {
+          angle: 0,
+          duration: 0.4,
+          easing: 6
+        },
+        {
+          angle: -0.5,
+          duration: 0.3,
+          easing: 6
+        },
+      ],
+      37: [
+        {
+          angle: -0.1,
+          duration: 0.5,
+          easing: 6
+        },
+        {
+          angle: 0.1,
+          duration: 0.5,
+          easing: 6
+        },
+      ],
+      38: [
+        {
+          angle: -0.25,
+          duration: 0.2,
+          easing: 5
+        },
+        {
+          angle: -0.5,
+          duration: 0.3,
+          easing: 6
+        },
+        {
+          angle: 0,
+          duration: 0.3,
+          easing: 0
+        },
+        {
+          angle: 0,
+          duration: 0.2,
+          easing: 4
+        },
+      ],
+      40: [
+        {
+          angle: 0.075,
+          duration: 0.2,
+          easing: 5
+        },
+        {
+          angle: 0.15,
+          duration: 0.5,
+          easing: 6
+        },
+        {
+          angle: -0.05,
+          duration: 0.3,
+          easing: 4
+        },
+      ],
+      41: [
+        {
+          angle: 0,
+          duration: 0.2,
+          easing: 5
+        },
+        {
+          angle: 0.1,
+          duration: 0.5,
+          easing: 6
+        },
+        {
+          angle: -0.15,
+          duration: 0.3,
+          easing: 4
+        },
+      ],
+      43: [
+        {
+          angle: 0.025,
+          duration: 0.2,
+          easing: 5
+        },
+        {
+          angle: -0.05,
+          duration: 0.5,
+          easing: 6
+        },
+        {
+          angle: 0.15,
+          duration: 0.3,
+          easing: 4
+        },
+      ],
+      44: [
+        {
+          angle: 0,
+          duration: 0.2,
+          easing: 5
+        },
+        {
+          angle: -0.15,
+          duration: 0.3,
+          easing: 6
+        },
+        {
+          angle: 0.1,
+          duration: 0.5,
+          easing: 4
+        },
+      ],
+    },
+  ]
 
   const scale = 12;
   const offsetX = 160;
@@ -959,7 +1070,7 @@ function renderRacer() {
     }
   }
 
-  function drawSortedShape(shapeNode: Extract<TransformedSkeletonNode, { type: 1 }>, defaultColor: string) {
+  function drawSortedShape(shapeNode: Extract<TransformedSkeletonPart, { type: 1 }>, defaultColor: string) {
     const shape = shapeNode.points;
     if (!shape || shape.length < 3) return;
 
@@ -981,7 +1092,7 @@ function renderRacer() {
     ctx.fill();
   }
 
-  function drawSkeleton(nodeSet: TransformedSkeletonNode[], defaultColor = "#454545") {
+  function drawSkeleton(nodeSet: TransformedSkeletonPart[], defaultColor = "#454545") {
     const transformedPosByNode = new Map<SkeletonNode, [number, number]>();
     for (const transformedNode of nodeSet) {
       if (transformedNode.type === 0) {
@@ -1018,15 +1129,78 @@ function renderRacer() {
   function sortNode(
     node: SkeletonNode,
     parent: SkeletonNode | null,
-    nodeSet: TransformedSkeletonNode[],
+    partId: number,
+    parentAnimAngle: number,
+    nodeSet: TransformedSkeletonPart[],
     inheritedColor = "#454545",
+    parentBindPos: [number, number] = [0, 0],
+    parentAnimatedPos: [number, number] = [0, 0],
   ) {
+    function getAnimationStep(partId: number, animIdx: number, time: number) {
+      const anim = animations[animIdx];
+      if (!anim) return 0;
+
+      const partAnim = anim[partId];
+      if (!partAnim || partAnim.length === 0) return 0;
+      if (partAnim.length === 1) return partAnim[0].angle;
+
+      let totalDuration = 0;
+      for (const keyframe of partAnim) {
+        totalDuration += mathJs.max(0, keyframe.duration);
+      }
+
+      if (totalDuration <= 0) {
+        return partAnim[0].angle;
+      }
+
+      const wrappedTime = ((time % totalDuration) + totalDuration) % totalDuration;
+      let elapsed = 0;
+
+      for (let i = 0; i < partAnim.length; ++i) {
+        const current = partAnim[i];
+        const next = partAnim[(i + 1) % partAnim.length];
+        const segmentDuration = mathJs.max(0, current.duration);
+
+        if (segmentDuration === 0) {
+          continue;
+        }
+
+        const segmentEnd = elapsed + segmentDuration;
+        if (wrappedTime < segmentEnd || i === partAnim.length - 1) {
+          const t = (wrappedTime - elapsed) / segmentDuration;
+          const easingIdx = clamp(current.easing | 0, 0, easingFunctions.length - 1);
+          const easingFn = easingFunctions[easingIdx] ?? easingFunctions[0];
+          const easedT = easingFn(clamp(t, 0, 1));
+          return current.angle + ((next.angle - current.angle) * easedT);
+        }
+
+        elapsed = segmentEnd;
+      }
+
+      return partAnim[partAnim.length - 1].angle;
+    }
+
+    const animAngle = getAnimationStep(partId, 2, animationTime) + parentAnimAngle;
+    const animSin = mathJs.sin(animAngle * mathJs.PI);
+    const animCos = mathJs.cos(animAngle * mathJs.PI);
+
     const rotSin = mathJs.sin(racerRotation);
     const rotCos = mathJs.cos(racerRotation);
 
+    function applyAnimationTransform(x: number, y: number) {
+      const localX = x - parentBindPos[0];
+      const localY = y - parentBindPos[1];
+
+      return {
+        x: (localX * animCos) - (localY * animSin) + parentAnimatedPos[0],
+        y: (localX * animSin) + (localY * animCos) + parentAnimatedPos[1],
+      };
+    }
+
     function applyYawTransform(x: number, y: number, z: number) {
-      const animX = x;
-      const animY = y;
+      const animated = applyAnimationTransform(x, y);
+      const animX = animated.x;
+      const animY = animated.y;
       
       // Pseudo-3D yaw: collapse x by cos, offset x by depth, and shift y by signed x.
       const transformedX = (animX * rotCos) - (z * rotSin);
@@ -1040,7 +1214,7 @@ function renderRacer() {
       };
     }
 
-    function insertSorted(nodeItem: TransformedSkeletonNode) {
+    function insertSorted(nodeItem: TransformedSkeletonPart) {
       let insertIdx = nodeSet.length;
       for (let i = 0; i < nodeSet.length; ++i) {
         if (nodeItem.z < nodeSet[i].z) {
@@ -1053,8 +1227,9 @@ function renderRacer() {
     }
 
     const nodeColor = node.color ?? inheritedColor;
+    const animatedCenter = applyAnimationTransform(node.pos[0], node.pos[1]);
     const transformedCenter = applyYawTransform(node.pos[0], node.pos[1], node.z);
-    const transformedNode: TransformedSkeletonNode = {
+    const transformedNode: TransformedSkeletonPart = {
       type: 0,
       pos: [transformedCenter.x, transformedCenter.y],
       z: transformedCenter.z + node.radius + (node.depthOffset ?? 0),
@@ -1101,7 +1276,7 @@ function renderRacer() {
         transformedShapeZ = transformedShapeOrigin.z + ((targetOrigin.z - transformedShapeOrigin.z) * morphAmount);
       }
 
-      const transformedShape: TransformedSkeletonNode = {
+      const transformedShape: TransformedSkeletonPart = {
         color: nodeColor,
         ...shape,
         points: transformedPoints,
@@ -1112,14 +1287,25 @@ function renderRacer() {
     }
 
     for (const child of node.children ?? []) {
-      sortNode(child, node, nodeSet, nodeColor);
+      partId = sortNode(
+        child,
+        node,
+        partId + 1,
+        animAngle,
+        nodeSet,
+        nodeColor,
+        node.pos,
+        [animatedCenter.x, animatedCenter.y],
+      );
     }
+
+    return partId;
   }
 
   function getSortedNodes(skeleton: SkeletonNode) {
-    const nodeSet: TransformedSkeletonNode[] = [];
+    const nodeSet: TransformedSkeletonPart[] = [];
 
-    sortNode(skeleton, null, nodeSet);
+    sortNode(skeleton, null, 0, 0, nodeSet);
 
     return nodeSet;
   }
