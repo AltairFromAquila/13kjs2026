@@ -39,7 +39,7 @@ const kCamHeightMin = 1;
 const kVerticalFov = mathJs.PI * 0.4;
 const kTau = mathJs.PI * 2;
 let prevInputUpdateTime = performance.now();
-let racerRotation = mathJs.PI * 0;
+let racerRotation = mathJs.PI * -0.5;
 let animationTime = 0;
 
 function handleMovementInput(deltaMs: number) {
@@ -174,7 +174,7 @@ export function render(a: any) {
   const now = performance.now();
   handleMovementInput(now - prevInputUpdateTime);
   racerRotation += (now - prevInputUpdateTime) * 0.001;
-  animationTime = (animationTime + (now - prevInputUpdateTime) * 0.0005) % 1.0;
+  animationTime = (animationTime + (now - prevInputUpdateTime) * 0.001) % 1.0;
   prevInputUpdateTime = now;
 
   renderProjectedPlane(a);
@@ -493,30 +493,30 @@ function renderRacer() {
                         ]
                       },
                       {
-                        pos: [-6, -17.5], // Hair 2
-                        z: 0.6,
-                        radius: 0.4,
+                        pos: [-6.5, -17.5], // Hair 2
+                        z: 0.5,
+                        radius: 0.3,
                         split: true,
                         color: "#ff0",
-                        depthOffset: 0.25,
+                        depthOffset: 0.5,
                         children: [
                           {
-                            pos: [-5, -16],
+                            pos: [-5, -16.5],
                             z: 1,
                             radius: 0,
-                            depthOffset: 1,
+                            depthOffset: 1.5,
                           }
                         ]
                       },
                       {
-                        pos: [-6, -17.5], // Hair 3
-                        z: -0.6,
-                        radius: 0.4,
+                        pos: [-6.5, -17.5], // Hair 3
+                        z: -0.5,
+                        radius: 0.3,
                         split: true,
                         color: "#ff0",
                         children: [
                           {
-                            pos: [-5, -16],
+                            pos: [-5, -16.5],
                             z: -1,
                             radius: 0,
                           }
@@ -528,6 +528,7 @@ function renderRacer() {
                         radius: 0.5,
                         split: true,
                         color: "#ff7",
+                        depthOffset: 0.75,
                         children: [
                           {
                             pos: [-2, -15],
@@ -1018,6 +1019,175 @@ function renderRacer() {
           easing: 4
         },
       ],
+      46: [
+        {
+          angle: 0.05,
+          duration: 0.5,
+          easing: 6
+        },
+        {
+          angle: -0.05,
+          duration: 0.5,
+          easing: 6
+        },
+      ],
+    },
+    {   // Running
+      4: [
+        {
+          angle: 0.05,
+          duration: 0.5,
+          easing: 6
+        },
+        {
+          angle: 0.15,
+          duration: 0.5,
+          easing: 6
+        },
+      ],
+      34: [
+        {
+          angle: 0.36,
+          duration: 0.5,
+          easing: 6
+        },
+        {
+          angle: -0.1,
+          duration: 0.5,
+          easing: 6
+        },
+      ],
+      35: [
+        {
+          angle: -0.2,
+          duration: 0.2,
+          easing: 5
+        },
+        {
+          angle: 0,
+          duration: 0.5,
+          easing: 6
+        },
+        {
+          angle: -0.5,
+          duration: 0.3,
+          easing: 4
+        },
+      ],
+      37: [
+        {
+          angle: 0.1,
+          duration: 0.25,
+          easing: 5
+        },
+        {
+          angle: -0.1,
+          duration: 0.5,
+          easing: 6
+        },
+        {
+          angle: 0.36,
+          duration: 0.25,
+          easing: 4
+        },
+      ],
+      38: [
+        {
+          angle: -0.1,
+          duration: 0.4,
+          easing: 5
+        },
+        {
+          angle: -0.5,
+          duration: 0.5,
+          easing: 6
+        },
+        {
+          angle: 0,
+          duration: 0.1,
+          easing: 4
+        },
+      ],
+      40: [
+        {
+          angle: 0.1,
+          duration: 0.375,
+          easing: 5
+        },
+        {
+          angle: -0.2,
+          duration: 0.5,
+          easing: 6
+        },
+        {
+          angle: 0.2,
+          duration: 0.125,
+          easing: 4
+        },
+      ],
+      41: [
+        {
+          angle: 0,
+          duration: 0.3,
+          easing: 5
+        },
+        {
+          angle: -0.1,
+          duration: 0.5,
+          easing: 6
+        },
+        {
+          angle: 0.2,
+          duration: 0.2,
+          easing: 4
+        },
+      ],
+      43: [
+        {
+          angle: -0.1,
+          duration: 0.125,
+          easing: 5
+        },
+        {
+          angle: -0.2,
+          duration: 0.5,
+          easing: 6
+        },
+        {
+          angle: 0.2,
+          duration: 0.375,
+          easing: 4
+        },
+      ],
+      44: [
+        {
+          angle: -0.084,
+          duration: 0.05,
+          easing: 5
+        },
+        {
+          angle: -0.1,
+          duration: 0.5,
+          easing: 6
+        },
+        {
+          angle: 0.2,
+          duration: 0.45,
+          easing: 4
+        },
+      ],
+      47: [
+        {
+          angle: -0.2,
+          duration: 0.5,
+          easing: 6
+        },
+        {
+          angle: -0.3,
+          duration: 0.5,
+          easing: 6
+        },
+      ],
     },
   ]
 
@@ -1180,7 +1350,7 @@ function renderRacer() {
       return partAnim[partAnim.length - 1].angle;
     }
 
-    const animAngle = getAnimationStep(partId, 2, animationTime) + parentAnimAngle;
+    const animAngle = getAnimationStep(partId, 3, animationTime) + parentAnimAngle;
     const animSin = mathJs.sin(animAngle * mathJs.PI);
     const animCos = mathJs.cos(animAngle * mathJs.PI);
 
@@ -1201,10 +1371,11 @@ function renderRacer() {
       const animated = applyAnimationTransform(x, y);
       const animX = animated.x;
       const animY = animated.y;
+      const smoothSignX = animX / mathJs.sqrt((animX * animX) + 0.25);
       
       // Pseudo-3D yaw: collapse x by cos, offset x by depth, and shift y by signed x.
       const transformedX = (animX * rotCos) - (z * rotSin);
-      const transformedY = animY + (rotSin * kVerticalFactor * mathJs.sign(animX));
+      const transformedY = animY + (rotSin * kVerticalFactor * smoothSignX);
       const transformedZ = (z * rotCos) + (animX * rotSin);
 
       return {
