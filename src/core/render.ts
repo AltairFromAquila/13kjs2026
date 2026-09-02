@@ -1,6 +1,8 @@
 import { easeInOutQuad, easeInOutSine, easeInQuad, easeInSine, easeOutQuad, easeOutSine } from "../easing";
-import { clamp, mathJs, vec2New } from "../math";
-import { canvas, ctx } from "../sys/context";
+import { cloudsGetPixels } from "../game/clouds";
+import { racerRender } from "../game/racer";
+import { kMathHalfPi, kMathPi, kMathTau, mathClamp, mathCos, mathJs, mathMod, mathSin, mathTan, vec2New } from "../math";
+import { canvas, createOffscreenCanvas, ctx } from "../sys/context";
 
 // TODO: Refactor
 const camPos = vec2New();
@@ -39,16 +41,23 @@ const kCamHeightMin = 1;
 const kVerticalFov = mathJs.PI * 0.4;
 const kTau = mathJs.PI * 2;
 let prevInputUpdateTime = performance.now();
-let racerRotation = mathJs.PI * -0.5;
+let racerRotation = mathJs.PI * 0.25;
 let animationTime = 0;
+let logTime = 0;
+let cloudsWindOffsetX = 0;
+let cloudsWindOffsetY = 0;
+
+const kCloudsPlaneHeightOffset = 50;
+const kCloudsWindSpeedX = 6;
+const kCloudsWindSpeedY = -2;
 
 function handleMovementInput(deltaMs: number) {
   const distance = kCamSpeed * (deltaMs / 1000);
   const heightDelta = kHeightSpeed * (deltaMs / 1000);
   const pitchDelta = kPitchSpeed * (deltaMs / 1000);
   const turnDelta = kTurnSpeed * (deltaMs / 1000);
-  const yawSin = mathJs.sin(camAngle);
-  const yawCos = mathJs.cos(camAngle);
+  const yawSin = mathSin(camAngle);
+  const yawCos = mathCos(camAngle);
 
   // Camera-local basis in world space.
   const forwardX = yawSin;
@@ -82,6 +91,12 @@ function handleMovementInput(deltaMs: number) {
   camHeight = mathJs.max(kCamHeightMin, camHeight);
   camAngle = ((camAngle % kTau) + kTau) % kTau;
   camPitch = mathJs.max(-kPitchMaxAbs, mathJs.min(kPitchMaxAbs, camPitch));
+
+  logTime += deltaMs * 0.001;
+  if (logTime > 2) {
+    console.log(camPos.x, camPos.y, camHeight, camAngle, camPitch);
+    logTime = 0;
+  }
 }
 
 window.addEventListener("keydown", (ev) => {
@@ -167,14 +182,22 @@ window.addEventListener("blur", () => {
   moveState.pitchPositive = false;
 });
 
-const projectedPlaneCanvas: OffscreenCanvas = new OffscreenCanvas(canvas.width, canvas.height);
-const projectedPlaneCtx: OffscreenCanvasRenderingContext2D = projectedPlaneCanvas.getContext('2d')!;
+const {
+  offscreenCanvas: projectedPlaneCanvas,
+  offscreenCtx: projectedPlaneCtx
+} = createOffscreenCanvas(canvas.width, canvas.height, false, false);
+// const projectedPlaneCanvas: OffscreenCanvas = new OffscreenCanvas(canvas.width, canvas.height);
+// const projectedPlaneCtx: OffscreenCanvasRenderingContext2D = projectedPlaneCanvas.getContext('2d')!;
 
-export function render(a: any) {
+export function render(a: any, b: any) {
   const now = performance.now();
-  handleMovementInput(now - prevInputUpdateTime);
-  racerRotation += (now - prevInputUpdateTime) * 0.001;
-  animationTime = (animationTime + (now - prevInputUpdateTime) * 0.001) % 1.0;
+  const deltaMs = now - prevInputUpdateTime;
+  handleMovementInput(deltaMs);
+  // racerRotation += (now - prevInputUpdateTime) * 0.001;
+  animationTime = (animationTime + deltaMs * 0.0015) % 1.0;
+  const deltaSec = deltaMs * 0.001;
+  cloudsWindOffsetX += kCloudsWindSpeedX * deltaSec;
+  cloudsWindOffsetY += kCloudsWindSpeedY * deltaSec;
   prevInputUpdateTime = now;
 
   renderProjectedPlane(a);
@@ -186,12 +209,13 @@ export function render(a: any) {
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(projectedPlaneCanvas, 0, 0);
-  renderRacer();
+  // renderRacer();
+  renderRacer2(b);
 }
 
 const verTanTable = (() => {
   const halfHeight = canvas.height * 0.5;
-  const tanHalfFov = mathJs.tan(kVerticalFov * 0.5);
+  const tanHalfFov = mathTan(kVerticalFov * 0.5);
   const ret: number[] = [];
 
   for (let y = 0; y < canvas.height; ++y) {
@@ -203,7 +227,7 @@ const verTanTable = (() => {
 })();
 const horTanTable = (() => {
   const halfWidth = canvas.width * 0.5;
-  const tanHalfVFov = mathJs.tan(kVerticalFov * 0.5);
+  const tanHalfVFov = mathTan(kVerticalFov * 0.5);
   const tanHalfHFov = tanHalfVFov * (canvas.width / canvas.height);
   const ret: number[] = [];
 
@@ -216,9 +240,11 @@ const horTanTable = (() => {
 })();
 
 let trackPixels: Uint32Array | null = null;
+let cloudsPixels: Uint32Array | null = null;
 const outputData = projectedPlaneCtx.createImageData(canvas.width, canvas.height);
 const outputPixels = new Uint32Array(outputData.data.buffer);
 const kMask = (2048 * 2) - 1; // Track texture is always power of two, and mod operator tanks the frame rate
+const kCloudsMask = 512 - 1;
 const kSkyColor = 0xffebce87;
 const kFogFactor = 0.1;
 const kGroundBaseColor = 0xff2b8f2b;
@@ -280,15 +306,19 @@ function renderProjectedPlane(a: any) {
 
     trackPixels = new Uint32Array(trackImage.data.buffer);
   }
+  if (!cloudsPixels) {
+    cloudsPixels = cloudsGetPixels();
+  }
 
   const width = canvas.width;
   const height = canvas.height;
 
-  const camSin = mathJs.sin(camPitch);
-  const camCos = mathJs.cos(camPitch);
-  const yawSin = mathJs.sin(camAngle);
-  const yawCos = mathJs.cos(camAngle);
+  const camSin = mathSin(camPitch);
+  const camCos = mathCos(camPitch);
+  const yawSin = mathSin(camAngle);
+  const yawCos = mathCos(camAngle);
   const rowStride = kMask + 1;
+  const cloudsRowStride = kCloudsMask + 1;
 
   for (let j = 0; j < height; ++j) {
     const outputRow = (height - 1 - j);
@@ -304,39 +334,54 @@ function renderProjectedPlane(a: any) {
 
     const invZ = 1 / -rayZ;
     const t = camHeight * invZ;
+    const cloudsT = (camHeight + kCloudsPlaneHeightOffset) * invZ;
     const localY = t * rayY;
-    const linearFogValue = clamp((invZ * kFogFactor) - 1, 0, 1);
+    const cloudsLocalY = cloudsT * rayY;
+    const linearFogValue = mathClamp((invZ * kFogFactor) - 1, 0, 1);
     const fogValue = 1 - (1 - linearFogValue) * (1 - linearFogValue);
 
     for (let i = 0; i < width; ++i) {
       const sx = horTanTable[i];
       const localX = t * sx;
+      const cloudsLocalX = cloudsT * sx;
 
       const worldX = (yawCos * localX) - (yawSin * localY);
       const worldY = (yawSin * localX) + (yawCos * localY);
+      const cloudsWorldX = (yawCos * cloudsLocalX) - (yawSin * cloudsLocalY) + cloudsWindOffsetX;
+      const cloudsWorldY = (yawSin * cloudsLocalX) + (yawCos * cloudsLocalY) + cloudsWindOffsetY;
 
       const texX = (camPos.x + worldX) | 0;
       const texY = (camPos.y + worldY) | 0;
+      const cloudsTexX = (camPos.x + cloudsWorldX) | 0;
+      const cloudsTexY = (camPos.y + cloudsWorldY) | 0;
       const rowOffset = (texY & kMask) * rowStride;
       const textureIdx = rowOffset + (texX & kMask);
+      const cloudsRowOffset = (cloudsTexY & kCloudsMask) * cloudsRowStride;
+      const cloudsTextureIdx = cloudsRowOffset + (cloudsTexX & kCloudsMask);
       const outputIdx = (width * outputRow) + i;
 
       const trackColor = trackPixels[textureIdx];
+      const cloudColor = cloudsPixels[cloudsTextureIdx];
       const groundFogged = (fogValue > 0)
         ? blendAbgr(kGroundColor, kSkyColor, fogValue)
         : kGroundColor;
+      const cloudsFogged = (fogValue > 0)
+        ? blendAbgr(cloudColor, kSkyColor, linearFogValue)
+        : cloudColor;
+
       const trackFogged = (fogValue > 0)
         ? blendAbgr(trackColor, kSkyColor, linearFogValue)
         : trackColor;
 
-      outputPixels[outputIdx] = overAbgr(trackFogged, groundFogged);
+      const groundAndClouds = overAbgr(cloudsFogged, groundFogged);
+      outputPixels[outputIdx] = overAbgr(trackFogged, groundAndClouds);
     }
   }
 
   projectedPlaneCtx.putImageData(outputData, 0, 0);
 }
 
-const kVerticalFactor = 0.5;
+const kVerticalFactor = 1;
 function renderRacer() {
   type SkeletonNodeShape = {
     points: [number, number][];
@@ -1035,12 +1080,12 @@ function renderRacer() {
     {   // Running
       4: [
         {
-          angle: 0.05,
+          angle: 0.15,
           duration: 0.5,
           easing: 6
         },
         {
-          angle: 0.15,
+          angle: 0.05,
           duration: 0.5,
           easing: 6
         },
@@ -1189,11 +1234,11 @@ function renderRacer() {
         },
       ],
     },
-  ]
+  ];
 
-  const scale = 12;
-  const offsetX = 160;
-  const offsetY = 400;
+  const scale = 18;
+  const offsetX = canvas.width * 0.5;
+  const offsetY = canvas.height * 1;
 
   function toScreen(point: [number, number]): [number, number] {
     return [offsetX + (point[0] * scale), offsetY + (point[1] * scale)];
@@ -1338,9 +1383,9 @@ function renderRacer() {
         const segmentEnd = elapsed + segmentDuration;
         if (wrappedTime < segmentEnd || i === partAnim.length - 1) {
           const t = (wrappedTime - elapsed) / segmentDuration;
-          const easingIdx = clamp(current.easing | 0, 0, easingFunctions.length - 1);
+          const easingIdx = mathClamp(current.easing | 0, 0, easingFunctions.length - 1);
           const easingFn = easingFunctions[easingIdx] ?? easingFunctions[0];
-          const easedT = easingFn(clamp(t, 0, 1));
+          const easedT = easingFn(mathClamp(t, 0, 1));
           return current.angle + ((next.angle - current.angle) * easedT);
         }
 
@@ -1350,12 +1395,12 @@ function renderRacer() {
       return partAnim[partAnim.length - 1].angle;
     }
 
-    const animAngle = getAnimationStep(partId, 3, animationTime) + parentAnimAngle;
-    const animSin = mathJs.sin(animAngle * mathJs.PI);
-    const animCos = mathJs.cos(animAngle * mathJs.PI);
+    const animAngle = getAnimationStep(partId, 0, animationTime) + parentAnimAngle;
+    const animSin = mathSin(animAngle * mathJs.PI);
+    const animCos = mathCos(animAngle * mathJs.PI);
 
-    const rotSin = mathJs.sin(racerRotation);
-    const rotCos = mathJs.cos(racerRotation);
+    const rotSin = mathSin(racerRotation);
+    const rotCos = mathCos(racerRotation);
 
     function applyAnimationTransform(x: number, y: number) {
       const localX = x - parentBindPos[0];
@@ -1532,4 +1577,37 @@ function renderRacer() {
   // ctx.fill();
 
   ctx.restore();
+}
+
+function renderRacer2(racer: any) {
+  const dx = racer.mPos.x - camPos.x;
+  const dy = racer.mPos.y - camPos.y;
+  const yawSin = mathSin(camAngle);
+  const yawCos = mathCos(camAngle);
+  const tanHalfVFov = mathTan(kVerticalFov * 0.5);
+  const tanHalfHFov = tanHalfVFov * (canvas.width / canvas.height);
+  const halfWidth = canvas.width * 0.5;
+  const halfHeight = canvas.height * 0.5;
+
+  const xCam = (yawCos * dx) + (yawSin * dy);
+  const zBase = (-yawSin * dx) + (yawCos * dy);
+  const pitchSin = mathSin(camPitch);
+  const pitchCos = mathCos(camPitch);
+  const yCam = (-camHeight * pitchCos) - (zBase * pitchSin);
+  const zCam = (-camHeight * pitchSin) + (zBase * pitchCos);
+  const zDepth = -zCam;
+  const safeZ = (zDepth > 1e-6) ? zDepth : 1e-6;
+  const ndcX = xCam / (safeZ * tanHalfHFov);
+  const ndcY = yCam / (safeZ * tanHalfVFov);
+  const x = (ndcX * halfWidth) + halfWidth - 0.5;
+  const y = halfHeight - (ndcY * halfHeight) - 0.5;
+
+  const invZ = 1 / safeZ;
+  const camFromRacerAngle = mathJs.atan2(-dy, -dx);
+  const relAngle = racer.mAngle - camFromRacerAngle - kMathHalfPi;
+  // const angle = mathJs.atan2(mathSin(relAngle), mathCos(relAngle));
+  const angle = mathMod((relAngle + kMathPi), kMathTau) - kMathPi;
+  const scale = (zDepth > 1e-6) ? (440 / zDepth) : 0;
+  
+  racerRender(racer, ctx, x, y, invZ, angle, scale);
 }

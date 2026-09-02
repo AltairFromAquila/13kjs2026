@@ -1,25 +1,17 @@
 // Taken from https://easings.net/
 
-export function easeInSine(x: number): number {
-  return 1 - Math.cos((x * Math.PI) / 2);
-}
+import { kMathPi, mathCos, mathJs, mathSin } from "./math";
 
-export function easeOutSine(x: number): number {
-  return Math.sin((x * Math.PI) / 2);
-}
+export const easeLinear = (x: number): number => x;
 
-export function easeInOutSine(x: number): number {
-  return -(Math.cos(Math.PI * x) - 1) / 2;
-}
+export const easeInSine = (x: number): number => 1 - mathCos((x * kMathPi) / 2);
 
-export function easeInQuad(x: number): number {
-  return x * x;
-}
+export const easeOutSine = (x: number): number => mathSin((x * kMathPi) / 2);
 
-export function easeOutQuad(x: number): number {
-  return 1 - (1 - x) * (1 - x);
-}
+export const easeInOutSine = (x: number): number => -(mathCos(kMathPi * x) - 1) / 2;
 
-export function easeInOutQuad(x: number): number {
-  return x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2;
-}
+export const easeInQuad = (x: number): number => x * x;
+
+export const easeOutQuad = (x: number): number => 1 - (1 - x) * (1 - x);
+
+export const easeInOutQuad = (x: number): number => x < 0.5 ? 2 * x * x : 1 - mathJs.pow(-2 * x + 2, 2) / 2;
