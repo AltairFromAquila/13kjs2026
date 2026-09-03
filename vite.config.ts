@@ -6,56 +6,30 @@ export default defineConfig({
     target: 'esnext',
     minify: 'terser',
     sourcemap: false,
-    reportCompressedSize: false,
     cssCodeSplit: false,
     modulePreload: {
       polyfill: false,
     },
     terserOptions: {
+      toplevel: true,
+      nameCache: {},
+      ecma: 2025,
+      module: true,
       compress: {
-        passes: 5,
-        toplevel: true,
-        drop_console: true,
-        drop_debugger: true,
-        pure_funcs: ['console.log', 'console.info', 'console.debug', 'console.warn'],
         booleans_as_integers: true,
-        dead_code: true,
-        unsafe: true,
-        unsafe_math: true,
-        unsafe_methods: true,
-        unsafe_proto: true,
-        unsafe_regexp: true,
-        unsafe_undefined: true,
+        passes: 5,
       },
       mangle: {
-        toplevel: true,
-        safari10: true,
         properties: {
-          // Max-aggressive test mode: mangle nearly all property keys.
-          regex: /^./,
-          keep_quoted: false,
-          builtins: false,
-          undeclared: true,
-          debug: false,
-          reserved: [],
+            regex: /.+/
         },
-      },
-      format: {
-        comments: false,
-        ascii_only: true,
-      },
-    },
-    rollupOptions: {
-      treeshake: {
-        moduleSideEffects: false,
-        propertyReadSideEffects: false,
-        unknownGlobalSideEffects: false,
+        module: true
       },
     },
     // In Vite 8/Rolldown, this replaces inlineDynamicImports for single-chunk output.
-    codeSplitting: false,
+    // codeSplitting: false,
   },
   esbuild: {
-    legalComments: 'none',
+    // legalComments: 'none',
   },
 });

@@ -9,7 +9,7 @@ function run(time: number) {
   requestAnimationFrame(run);
 
   const delta = time - currentTime;
-  game.process(game, delta);
+  game.process(game, delta * 0.001);
 
   currentTime = time;
 }

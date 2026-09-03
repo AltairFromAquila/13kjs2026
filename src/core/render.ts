@@ -250,6 +250,7 @@ const kFogFactor = 0.1;
 const kGroundBaseColor = 0xff2b8f2b;
 const kGroundSkyTint = 0.2;
 const kGroundColor = blendAbgr(kGroundBaseColor, kSkyColor, kGroundSkyTint);
+const kRacerScaleFromFocal = 440 / ((900 * 0.5) / mathTan(kVerticalFov * 0.5));
 
 function blendAbgr(src: number, dst: number, t: number): number {
   const invT = 1 - t;
@@ -1607,7 +1608,8 @@ function renderRacer2(racer: any) {
   const relAngle = racer.mAngle - camFromRacerAngle - kMathHalfPi;
   // const angle = mathJs.atan2(mathSin(relAngle), mathCos(relAngle));
   const angle = mathMod((relAngle + kMathPi), kMathTau) - kMathPi;
-  const scale = (zDepth > 1e-6) ? (440 / zDepth) : 0;
+  const focalY = halfHeight / tanHalfVFov;
+  const scale = kRacerScaleFromFocal * focalY * invZ;
 
   const offscreenOffset = 12 * scale;
   if (

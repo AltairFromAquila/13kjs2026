@@ -75,7 +75,7 @@ export const racerNew = (inSkeleton: SkeletonNode[], inSkeletonShapes: SkeletonN
   mVel: { x: 0, y: 0 },
   mAngle: 0,
 
-  mAnimIdx: 0,
+  mAnimIdx: 3,
   mAnimTime: 0,
   mAnimSpeed: 1,
 });
@@ -105,6 +105,10 @@ export const racerSetAngle = (i0: Racer, inAngle: number) => {
 };
 
 export const racerSetAngleFromVector = (i0: Racer, inVec: Vec2) => racerSetAngle(i0, mathJs.atan2(inVec.y, inVec.x));
+
+export const racerTick = (i0: Racer, inDelta: number) => {
+  i0.mAnimTime = (i0.mAnimTime + (inDelta * i0.mAnimSpeed)) % 1; // All animations have a total duration of 1.0, so we can wrap the time to stay within that range.
+};
 
 export const racerRender = (
   i0: Racer,
@@ -240,10 +244,9 @@ export const racerRender = (
       while (workIdx < shape[0].length) {
         shapePoints.push(
           applyRotationTransform(
-            // applyAnimationTransform(
-            //   shape[0][workIdx++], shape[0][workIdx++], animSin, animCos, skelNode[7]
-            // ),
-            [shape[0][workIdx++], shape[0][workIdx++]],
+            applyAnimationTransform(
+              shape[0][workIdx++], shape[0][workIdx++], animSin, animCos, skelNode[7]
+            ),
             nodeZ
           )
         );

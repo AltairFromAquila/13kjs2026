@@ -2,7 +2,7 @@ import { render } from "./core/render";
 import { racerDataGetSkeleton, racerDataGetSkeletonShapes } from "./data/racer.data";
 import { tracks } from "./data/track.data";
 import { cloudsGenerate } from "./game/clouds";
-import { racerNew, racerSetAngleFromVector, type Racer } from "./game/racer";
+import { racerNew, racerSetAngleFromVector, racerTick, type Racer } from "./game/racer";
 import { Track, trackDrawTexture, trackGetStartPositions, trackLoadData } from "./game/track";
 
 const kTargetTickTime = 1/120;
@@ -36,6 +36,7 @@ export class Game {
 }
 
 function processDefault(self: Game, delta: number) {
+  racerTick(self.racer, delta);
   render(self.track, self.racer);
   // ctx.drawImage(self.track.textureCanvas, 0, -650, 2800, 2800);
   // ctx.drawImage(self.track.textureCanvas, 0, 0, 1400, 1400);
