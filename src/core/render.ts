@@ -300,6 +300,73 @@ function overAbgr(top: number, bottom: number): number {
     | ((outR | 0) & 0xff);
 }
 
+// const renderRenderProjection = (
+//   inFrom: number, inTo: number,
+//   inWidth: number, inHeight: number,
+//   inPitchSin: number, inPitchCos: number,
+//   inRotSin: number, inRotCos: number,
+//   inCamHeight: number, inCloudsHeightOffset: number,
+//   inCloudsWindOffsetX: number, inCloudsWindOffsetY: number,
+// ) => {
+//   for (let j = inFrom; j < inTo; ++j) {
+//     const outputRow = (inHeight - 1 - j);
+//     const sy = verTanTable[j];
+
+//     const rayY = -inPitchCos - (sy * inPitchSin);
+//     const rayZ = -inPitchSin + (sy * inPitchCos);
+
+//     if (rayZ >= -1e-6) {
+//       outputPixels.fill(kSkyColor, outputRow * inWidth, (outputRow + 1) * inWidth);
+//       continue;
+//     }
+
+//     const invZ = 1 / -rayZ;
+//     const t = inCamHeight * invZ;
+//     const cloudsT = (inCamHeight + inCloudsHeightOffset) * invZ;
+//     const localY = t * rayY;
+//     const cloudsLocalY = cloudsT * rayY;
+//     const linearFogValue = mathClamp((invZ * kFogFactor) - 1, 0, 1);
+//     const fogValue = easeOutQuad(linearFogValue);
+
+//     for (let i = 0; i < inWidth; ++i) {
+//       const sx = horTanTable[i];
+//       const localX = t * sx;
+//       const cloudsLocalX = cloudsT * sx;
+
+//       const worldX = (inRotCos * localX) - (inRotSin * localY);
+//       const worldY = (inRotSin * localX) + (inRotCos * localY);
+//       const cloudsWorldX = (inRotCos * cloudsLocalX) - (inRotSin * cloudsLocalY) + inCloudsWindOffsetX;
+//       const cloudsWorldY = (inRotSin * cloudsLocalX) + (inRotCos * cloudsLocalY) + inCloudsWindOffsetY;
+
+//       const texX = (camPos.x + worldX) | 0;
+//       const texY = (camPos.y + worldY) | 0;
+//       const cloudsTexX = (camPos.x + cloudsWorldX) | 0;
+//       const cloudsTexY = (camPos.y + cloudsWorldY) | 0;
+//       const rowOffset = (texY & kMask) * rowStride;
+//       const textureIdx = rowOffset + (texX & kMask);
+//       const cloudsRowOffset = (cloudsTexY & kCloudsMask) * cloudsRowStride;
+//       const cloudsTextureIdx = cloudsRowOffset + (cloudsTexX & kCloudsMask);
+//       const outputIdx = (inWidth * outputRow) + i;
+
+//       const trackColor = trackPixels[textureIdx];
+//       const cloudColor = cloudsPixels[cloudsTextureIdx];
+//       const groundFogged = (fogValue > 0)
+//         ? blendAbgr(kGroundColor, kSkyColor, fogValue)
+//         : kGroundColor;
+//       const cloudsFogged = (fogValue > 0)
+//         ? blendAbgr(cloudColor, kSkyColor, linearFogValue)
+//         : cloudColor;
+
+//       const trackFogged = (fogValue > 0)
+//         ? blendAbgr(trackColor, kSkyColor, linearFogValue)
+//         : trackColor;
+
+//       const groundAndClouds = overAbgr(cloudsFogged, groundFogged);
+//       outputPixels[outputIdx] = overAbgr(trackFogged, groundAndClouds);
+//     }
+//   }
+// }
+
 function renderProjectedPlane(a: any) {
   if (!trackPixels) {
     const trackCanvas = a.textureCanvas as OffscreenCanvas;

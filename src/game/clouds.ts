@@ -44,7 +44,6 @@ export function cloudsGenerate() {
       const alpha = (density * 255) | 0;
       const shade = (205 + ((1 - density) * 45)) | 0;
 
-      // ABGR packing: A in high byte, then B, G, R.
       cloudsPixels[(y * kCloudsNoiseWidth) + x] = (alpha << 24) | (shade << 16) | (shade << 8) | shade;
     }
   }

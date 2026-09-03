@@ -54,6 +54,9 @@ export interface Racer {
   mMidCol: CircleCollider;
   mBackCol: CircleCollider;
 
+  mTrackSegmentIdx: number;
+  mTrackSegmentT: number;
+
   mPos: Vec2;
   mVel: Vec2;
   mAngle: number;
@@ -61,6 +64,8 @@ export interface Racer {
   mAnimIdx: number;
   mAnimTime: number;
   mAnimSpeed: number;
+
+  mIsPlayer: boolean;
 }
 
 export const racerNew = (inSkeleton: SkeletonNode[], inSkeletonShapes: SkeletonNodeShapes): Racer => ({
@@ -71,6 +76,9 @@ export const racerNew = (inSkeleton: SkeletonNode[], inSkeletonShapes: SkeletonN
   mMidCol: newCircleCollider(kRacerColRadius),
   mBackCol: newCircleCollider(kRacerColRadius),
 
+  mTrackSegmentIdx: 0,
+  mTrackSegmentT: 0,
+
   mPos: { x: 0, y: 0 },
   mVel: { x: 0, y: 0 },
   mAngle: 0,
@@ -78,6 +86,8 @@ export const racerNew = (inSkeleton: SkeletonNode[], inSkeletonShapes: SkeletonN
   mAnimIdx: 3,
   mAnimTime: 0,
   mAnimSpeed: 1,
+
+  mIsPlayer: false,
 });
 
 export const racerReset = (i0: Racer) => {
@@ -102,6 +112,9 @@ export const racerSetAngle = (i0: Racer, inAngle: number) => {
 
   i0.mBackCol.pos.x = i0.mPos.x - c * kRacerColDiameter;
   i0.mBackCol.pos.y = i0.mPos.y - s * kRacerColDiameter;
+
+  i0.mTrackSegmentIdx = 0;
+  i0.mTrackSegmentT = 0;
 };
 
 export const racerSetAngleFromVector = (i0: Racer, inVec: Vec2) => racerSetAngle(i0, mathJs.atan2(inVec.y, inVec.x));
