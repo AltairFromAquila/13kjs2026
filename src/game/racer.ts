@@ -110,7 +110,7 @@ export const racerRender = (
   i0: Racer,
   inCtx: CanvasRenderingContext2D,
   x: number, y: number, inInvZ: number,
-  inAngle: number, inScale: number
+  inAngle: number, inScale: number, inAlpha: number
 ) => {
   const getAnimatedAngle = (inPartId: number) =>{
     const anim = racerAnimations[i0.mAnimIdx];
@@ -178,9 +178,7 @@ export const racerRender = (
     return [x + (inPoint.x * inScale * dir), y + (inPoint.y * inScale)];
   }
 
-  const tmp = inAngle
   inAngle = mathPingPong(inAngle, -kMathHalfPi, kMathHalfPi);
-  // console.log(tmp, inAngle);
   const rotSin = mathSin(inAngle);
   const rotCos = mathCos(inAngle);
   const applyRotationTransform = (
@@ -275,6 +273,7 @@ export const racerRender = (
 
   inCtx.save();
   inCtx.globalCompositeOperation = "source-over";
+  inCtx.globalAlpha = inAlpha;
 
   const drawCircle = (x: number, y: number, radius: number, color: string) => {
     ctxSetFillStyle(inCtx, color);

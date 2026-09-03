@@ -1,7 +1,7 @@
 import { easeInOutQuad, easeInOutSine, easeInQuad, easeInSine, easeOutQuad, easeOutSine } from "../easing";
 import { cloudsGetPixels } from "../game/clouds";
 import { racerRender } from "../game/racer";
-import { kMathHalfPi, kMathPi, kMathTau, mathClamp, mathCos, mathJs, mathMod, mathSin, mathTan, vec2New } from "../math";
+import { kMathEpsilon, kMathHalfPi, kMathPi, kMathTau, mathClamp, mathCos, mathJs, mathMod, mathSin, mathTan, vec2New } from "../math";
 import { canvas, createOffscreenCanvas, ctx } from "../sys/context";
 
 // TODO: Refactor
@@ -32,10 +32,10 @@ const moveState = {
   pitchNegative: false,
   pitchPositive: false,
 };
-const kCamSpeed = 250;
+const kCamSpeed = 200;
 const kHeightSpeed = 300;
 const kPitchSpeed = mathJs.PI * 0.25;
-const kTurnSpeed = mathJs.PI * 0.75;
+const kTurnSpeed = mathJs.PI * 0.5;
 const kPitchMaxAbs = mathJs.PI * 0.5;
 const kCamHeightMin = 1;
 const kVerticalFov = mathJs.PI * 0.4;
@@ -338,7 +338,7 @@ function renderProjectedPlane(a: any) {
     const localY = t * rayY;
     const cloudsLocalY = cloudsT * rayY;
     const linearFogValue = mathClamp((invZ * kFogFactor) - 1, 0, 1);
-    const fogValue = 1 - (1 - linearFogValue) * (1 - linearFogValue);
+    const fogValue = easeOutQuad(linearFogValue);
 
     for (let i = 0; i < width; ++i) {
       const sx = horTanTable[i];
@@ -1608,6 +1608,23 @@ function renderRacer2(racer: any) {
   // const angle = mathJs.atan2(mathSin(relAngle), mathCos(relAngle));
   const angle = mathMod((relAngle + kMathPi), kMathTau) - kMathPi;
   const scale = (zDepth > 1e-6) ? (440 / zDepth) : 0;
+
+  const offscreenOffset = 12 * scale;
+  if (
+    x < -offscreenOffset || x > canvas.width + offscreenOffset ||
+    y < 0 || y > canvas.height + offscreenOffset
+  ) {
+      return;
+  }
+
+  const groundDistance = mathJs.hypot(dx, dy);
+  const groundInvZ = groundDistance / camHeight;
+  const linearFogValue = mathClamp((groundInvZ * kFogFactor) - 1, 0, 1);
+  const fogAlpha = 1 - easeOutQuad(linearFogValue);
+
+  if (zBase > -5 || fogAlpha < kMathEpsilon) {
+    return;
+  }
   
-  racerRender(racer, ctx, x, y, invZ, angle, scale);
+  racerRender(racer, ctx, x, y, invZ, angle, scale, fogAlpha);
 }
