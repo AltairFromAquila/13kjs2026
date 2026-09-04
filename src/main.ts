@@ -1,15 +1,15 @@
 import "./sys/context";
 
-import { Game } from "./game";
+import { Game, gameInit } from "./game";
 
-const game = new Game();
+gameInit();
 let currentTime = performance.now();
 
 function run(time: number) {
   requestAnimationFrame(run);
 
   const delta = time - currentTime;
-  game.process(game, delta * 0.001);
+  Game.mProcess(Game, delta * 0.001);
 
   currentTime = time;
 }

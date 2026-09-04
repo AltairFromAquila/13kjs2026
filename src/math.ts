@@ -60,16 +60,16 @@ export const vec2New = (x = 0, y = 0): Vec2 => ({ x, y });
 
 export const vec2NewCopy = (v: Vec2): Vec2 => ({ x: v.x, y: v.y });
 
-export const vec2Copy = (i0: Vec2, v: Vec2) => (
-  i0.x = v.x,
-  i0.y = v.y,
-  i0
+export const vec2Copy = (self: Vec2, v: Vec2) => (
+  self.x = v.x,
+  self.y = v.y,
+  self
 );
 
-export const vec2CopyFromTuple = (i0: Vec2, v: [number, number]) => (
-  i0.x = v[0],
-  i0.y = v[1],
-  i0
+export const vec2CopyFromTuple = (self: Vec2, v: [number, number]) => (
+  self.x = v[0],
+  self.y = v[1],
+  self
 );
 
 export const vec2MulScalar = (v: Vec2, s: number) => (
@@ -84,32 +84,32 @@ export const vec2DivScalar = (v: Vec2, s: number) => (
   v
 );
 
-export const vec2Add = (i0: Vec2, v: Vec2) => (
-  i0.x += v.x,
-  i0.y += v.y,
-  i0
+export const vec2Add = (self: Vec2, v: Vec2) => (
+  self.x += v.x,
+  self.y += v.y,
+  self
 );
 
-export const vec2Sub = (i0: Vec2, v: Vec2) => (
-  i0.x -= v.x,
-  i0.y -= v.y,
-  i0
+export const vec2Sub = (self: Vec2, v: Vec2) => (
+  self.x -= v.x,
+  self.y -= v.y,
+  self
 );
 
 export const vec2Dot = (v1: Vec2, v2: Vec2) => v1.x * v2.x + v1.y * v2.y;
 
-export const vec2Normalize = (i0: Vec2) => {
-  const len = mathJs.sqrt(vec2Dot(i0, i0));
+export const vec2Normalize = (self: Vec2) => {
+  const len = mathJs.sqrt(vec2Dot(self, self));
 
   if (len > kMathEpsilon) {
-    i0.x = i0.x / len;
-    i0.y = i0.y / len;
+    self.x = self.x / len;
+    self.y = self.y / len;
   } else {
-    i0.x = 0;
-    i0.y = 0;
+    self.x = 0;
+    self.y = 0;
   }
 
-  return i0;
+  return self;
 };
 
 export const vec2Distance = (v1: Vec2, v2: Vec2) => {

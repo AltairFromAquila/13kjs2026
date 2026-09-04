@@ -1,7 +1,9 @@
 import { racerAnimations, type SkeletonNode, type SkeletonNodeShapes } from "../data/racer.data";
-import { kMathEpsilon, kMathHalfPi, kMathPi, kMathTau, mathClamp, mathCos, mathJs, mathLerp, mathMod, mathPingPong, mathSin, vec2Copy, vec2CopyFromTuple, vec2New, type Vec2 } from "../math";
+import { Game } from "../game";
+import { kMathEpsilon, kMathHalfPi, kMathPi, kMathTau, mathClamp, mathCos, mathJs, mathLerp, mathMod, mathPingPong, mathSin, vec2Add, vec2Copy, vec2CopyFromTuple, vec2MulScalar, vec2New, vec2NewCopy, type Vec2 } from "../math";
 import { ctxBeginPath, ctxClosePathAndFill, ctxLineTo, ctxMoveTo, ctxSetFillStyle } from "../sys/context";
 import { newCircleCollider, type CircleCollider } from "./collision";
+import { trackCopyTrackPoint, trackFindPoint, trackFindPointInTrack, type TrackPointProjection } from "./track";
 
 const kRacerColRadius = 3 as const;
 const kRacerColDiameter = 6 as const;
@@ -54,6 +56,9 @@ export interface Racer {
   mMidCol: CircleCollider;
   mBackCol: CircleCollider;
 
+  mTrackPoints: { [pathIdx: number]: TrackPointProjection };
+  mLastValidPathIdx: number;
+
   mPos: Vec2;
   mVel: Vec2;
   mAngle: number;
@@ -61,6 +66,8 @@ export interface Racer {
   mAnimIdx: number;
   mAnimTime: number;
   mAnimSpeed: number;
+
+  mIsPlayer: boolean;
 }
 
 export const racerNew = (inSkeleton: SkeletonNode[], inSkeletonShapes: SkeletonNodeShapes): Racer => ({
@@ -71,6 +78,9 @@ export const racerNew = (inSkeleton: SkeletonNode[], inSkeletonShapes: SkeletonN
   mMidCol: newCircleCollider(kRacerColRadius),
   mBackCol: newCircleCollider(kRacerColRadius),
 
+  mTrackPoints: {},
+  mLastValidPathIdx: -1,
+
   mPos: { x: 0, y: 0 },
   mVel: { x: 0, y: 0 },
   mAngle: 0,
@@ -78,46 +88,86 @@ export const racerNew = (inSkeleton: SkeletonNode[], inSkeletonShapes: SkeletonN
   mAnimIdx: 3,
   mAnimTime: 0,
   mAnimSpeed: 1,
+
+  mIsPlayer: false,
 });
 
-export const racerReset = (i0: Racer) => {
-  i0.mPos.x = i0.mPos.y = i0.mVel.x = i0.mVel.y = i0.mFrontCol.pos.y =
-  i0.mMidCol.pos.x = i0.mMidCol.pos.y = i0.mBackCol.pos.y = 0;
+export const racerReset = (self: Racer) => {
+  self.mPos.x = self.mPos.y = self.mVel.x = self.mVel.y = self.mFrontCol.pos.y =
+  self.mMidCol.pos.x = self.mMidCol.pos.y = self.mBackCol.pos.y = 0;
 
-  i0.mFrontCol.pos.x = kRacerColDiameter;
-  i0.mBackCol.pos.x = -kRacerColDiameter;
+  self.mFrontCol.pos.x = kRacerColDiameter;
+  self.mBackCol.pos.x = -kRacerColDiameter;
+
+  self.mLastValidPathIdx = -1;
 };
 
-export const racerSetAngle = (i0: Racer, inAngle: number) => {
-  i0.mAngle = inAngle;
+export const racerSetupTrackPoints = (self: Racer, startTrackPoint: TrackPointProjection) => {
+  const mainPathTrackPoint = self.mTrackPoints[-1] || (self.mTrackPoints[-1] = { mPos: vec2New(), mTangent: vec2New() } as TrackPointProjection)
+
+  trackCopyTrackPoint(mainPathTrackPoint, startTrackPoint);
+  trackFindPointInTrack(Game.mTrack, self.mPos, -1, 1, self.mTrackPoints);
+
+  self.mLastValidPathIdx = -1;
+}
+
+export const racerSetAngle = (self: Racer, inAngle: number) => {
+  self.mAngle = inAngle;
 
   const c = mathCos(inAngle);
   const s = mathSin(inAngle);
 
-  i0.mFrontCol.pos.x = i0.mPos.x + c * kRacerColDiameter;
-  i0.mFrontCol.pos.y = i0.mPos.y + s * kRacerColDiameter;
+  self.mFrontCol.pos.x = self.mPos.x + c * kRacerColDiameter;
+  self.mFrontCol.pos.y = self.mPos.y + s * kRacerColDiameter;
 
-  i0.mMidCol.pos.x = i0.mPos.x;
-  i0.mMidCol.pos.y = i0.mPos.y;
+  self.mMidCol.pos.x = self.mPos.x;
+  self.mMidCol.pos.y = self.mPos.y;
 
-  i0.mBackCol.pos.x = i0.mPos.x - c * kRacerColDiameter;
-  i0.mBackCol.pos.y = i0.mPos.y - s * kRacerColDiameter;
+  self.mBackCol.pos.x = self.mPos.x - c * kRacerColDiameter;
+  self.mBackCol.pos.y = self.mPos.y - s * kRacerColDiameter;
 };
 
-export const racerSetAngleFromVector = (i0: Racer, inVec: Vec2) => racerSetAngle(i0, mathJs.atan2(inVec.y, inVec.x));
+export const racerSetAngleFromVector = (self: Racer, inVec: Vec2) => racerSetAngle(self, mathJs.atan2(inVec.y, inVec.x));
 
-export const racerTick = (i0: Racer, inDelta: number) => {
-  i0.mAnimTime = (i0.mAnimTime + (inDelta * i0.mAnimSpeed)) % 1; // All animations have a total duration of 1.0, so we can wrap the time to stay within that range.
+export const racerFixedTick = (self: Racer, inDelta: number) => {
+  vec2Add(self.mPos, vec2MulScalar(vec2NewCopy(self.mVel), inDelta));
+  trackFindPointInTrack(Game.mTrack, self.mPos, -1, 1, self.mTrackPoints);
+
+  let isInsideAnyPath = false;
+  let bestDistance = Infinity;
+  let bestPathIdx = -1;
+  for (let i = 0; i < Game.mTrack.secondaryPaths.length; ++i) {
+    if (self.mTrackPoints[i].mInside) {
+      isInsideAnyPath = true;
+      
+      const dist = self.mTrackPoints[i].mDistSqr;
+      if (dist < bestDistance) {
+        // This would be a bug if two track segments were too close with different widths, but for this game it's not a problem.
+        bestDistance = dist;
+        bestPathIdx = i;
+      }
+    }
+  }
+
+  if (isInsideAnyPath) {
+    self.mLastValidPathIdx = bestPathIdx;
+  } else {
+    // Activate autopilot to return to the track
+  }
+};
+
+export const racerTick = (self: Racer, inDelta: number) => {
+  self.mAnimTime = (self.mAnimTime + (inDelta * self.mAnimSpeed)) % 1; // All animations have a total duration of 1.0, so we can wrap the time to stay within that range.
 };
 
 export const racerRender = (
-  i0: Racer,
+  self: Racer,
   inCtx: CanvasRenderingContext2D,
   x: number, y: number, inInvZ: number,
   inAngle: number, inScale: number, inAlpha: number
 ) => {
   const getAnimatedAngle = (inPartId: number) =>{
-    const anim = racerAnimations[i0.mAnimIdx];
+    const anim = racerAnimations[self.mAnimIdx];
     if (!anim) return 0;
   
     const partAnim = anim[inPartId];
@@ -137,7 +187,7 @@ export const racerRender = (
       return partAnim[0] as number;
     }
   
-    const wrappedTime = mathMod(i0.mAnimTime, totalDuration);
+    const wrappedTime = mathMod(self.mAnimTime, totalDuration);
     let elapsed = 0;
   
     for (workIdx = 0; workIdx < partAnimLen; workIdx += 3) {
@@ -167,8 +217,8 @@ export const racerRender = (
     inAnimSin: number, inAnimCos: number,
     inParentPart: number
   ) => {
-    const localX = x - (i0.mSkeleton[inParentPart]?.[0] ?? 0);
-    const localY = y - (i0.mSkeleton[inParentPart]?.[1] ?? 0);
+    const localX = x - (self.mSkeleton[inParentPart]?.[0] ?? 0);
+    const localY = y - (self.mSkeleton[inParentPart]?.[1] ?? 0);
     const parentAnimatedPos = workTransformedNodes[inParentPart]?.mAnimPos ?? vec2New();
 
     return [
@@ -212,8 +262,8 @@ export const racerRender = (
   };
 
   let shapeIdx = 0;
-  for (let i = 0; i < i0.mSkeleton.length; ++i) {
-    const skelNode = i0.mSkeleton[i];
+  for (let i = 0; i < self.mSkeleton.length; ++i) {
+    const skelNode = self.mSkeleton[i];
     const parentPart = skelNode[7];
     const parentAnimAngle = workTransformedNodes[parentPart]?.mAngle ?? 0;
     const animAngle = getAnimatedAngle(i) + parentAnimAngle;
@@ -236,7 +286,7 @@ export const racerRender = (
 
     insertSorted(transNode);
 
-    const shape = i0.mSkeletonShapes[i];
+    const shape = self.mSkeletonShapes[i];
     if (shape) {
       let workIdx = 0;
 
@@ -289,7 +339,7 @@ export const racerRender = (
   // #region Draw skeleton
   for (const node of nodeSet) {
     if (node.mType === 1) {
-      ctxSetFillStyle(inCtx, i0.mSkeletonShapes[node.mRef][3]);
+      ctxSetFillStyle(inCtx, self.mSkeletonShapes[node.mRef][3]);
       ctxBeginPath(inCtx);
 
       node.mPoints.forEach((point, idx) => {
@@ -303,7 +353,7 @@ export const racerRender = (
 
       ctxClosePathAndFill(inCtx);
     } else {
-      const skelNode = i0.mSkeleton[node.mRef];
+      const skelNode = self.mSkeleton[node.mRef];
       const [sx, sy] = toScreen(node.mPos);
       const radius = skelNode[3] * inScale;
       const color = skelNode[5];
@@ -315,7 +365,7 @@ export const racerRender = (
         const dy = sy - psy;
         const len = mathJs.hypot(dx, dy);
 
-        const parentSkelNode = i0.mSkeleton[parent];
+        const parentSkelNode = self.mSkeleton[parent];
         const parentRadius = parentSkelNode[3] * inScale;
         if (len < kMathEpsilon) {
           drawCircle(psx, psy, mathJs.max(radius, parentRadius), color);
