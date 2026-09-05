@@ -189,7 +189,7 @@ const {
 // const projectedPlaneCanvas: OffscreenCanvas = new OffscreenCanvas(canvas.width, canvas.height);
 // const projectedPlaneCtx: OffscreenCanvasRenderingContext2D = projectedPlaneCanvas.getContext('2d')!;
 
-export function render(a: any, b: any) {
+export function render(a: any, b: any[]) {
   const now = performance.now();
   const deltaMs = now - prevInputUpdateTime;
   handleMovementInput(deltaMs);
@@ -210,7 +210,11 @@ export function render(a: any, b: any) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(projectedPlaneCanvas, 0, 0);
   // renderRacer();
-  renderRacer2(b);
+
+  for (const r of b) {
+    renderRacer2(r);
+  }
+  // renderRacer2(b);
 }
 
 const verTanTable = (() => {

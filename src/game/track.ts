@@ -306,43 +306,43 @@ export const trackGetStartPositions = (self: Track): TrackPointProjection[] => {
   if (segmentCount === 0) return positions;
 
   const estimateArcLength = (
-    inSegment: SplineSegment,
-    inT0: number,
-    inT1: number,
-    inSamples = 12,
-    inTargetDistance = Infinity,
+    segment: SplineSegment,
+    t0: number,
+    t1: number,
+    samples = 12,
+    targetDistance = Infinity,
   ) => {
-    if (inT1 === inT0) return 0;
+    if (t1 === t0) return 0;
 
     let length = 0;
-    let prev = splineCalculateSegmentPoint(inSegment, inT0, vec2New());
-    for (let i = 1; i <= inSamples; ++i) {
-      const t = mathLerp(inT0, inT1, i / inSamples);
-      const cur = splineCalculateSegmentPoint(inSegment, t, vec2New());
+    let prev = splineCalculateSegmentPoint(segment, t0, vec2New());
+    for (let i = 1; i <= samples; ++i) {
+      const t = mathLerp(t0, t1, i / samples);
+      const cur = splineCalculateSegmentPoint(segment, t, vec2New());
       
       const dx = cur.x - prev.x;
       const dy = cur.y - prev.y;
       length += mathJs.sqrt(dx * dx + dy * dy);
 
-      if (length >= inTargetDistance) return inTargetDistance;
+      if (length >= targetDistance) return targetDistance;
 
       prev = cur;
     }
     return length;
   };
 
-  const moveBackward = (inFromSegmentIdx: number, inFromT: number, inDistance: number) => {
+  const moveBackward = (fromSegmentIdx: number, fromT: number, distance: number) => {
     const eps = 1e-4;
-    let segmentIdx = wrapSegmentIndex(inFromSegmentIdx, segmentCount);
-    let t = inFromT;
-    let remaining = inDistance;
+    let segmentIdx = trackWrapSegmentIndex(fromSegmentIdx, segmentCount);
+    let t = fromT;
+    let remaining = distance;
     let guard = 0;
 
     while (remaining > 0 && guard < segmentCount * 4) {
       ++guard;
 
       if (t <= eps) {
-        segmentIdx = wrapSegmentIndex(segmentIdx - 1, segmentCount);
+        segmentIdx = trackWrapSegmentIndex(segmentIdx - 1, segmentCount);
         t = 1;
       }
 
@@ -371,7 +371,7 @@ export const trackGetStartPositions = (self: Track): TrackPointProjection[] => {
       }
 
       remaining -= available;
-      segmentIdx = wrapSegmentIndex(segmentIdx - 1, segmentCount);
+      segmentIdx = trackWrapSegmentIndex(segmentIdx - 1, segmentCount);
       t = 1;
     }
 
@@ -404,34 +404,36 @@ export const trackGetStartPositions = (self: Track): TrackPointProjection[] => {
   return positions;
 }
 
-export const trackCopyTrackPoint = (inTrackPointTo: TrackPointProjection, inTrackPointFrom: TrackPointProjection) => {
-  inTrackPointTo.mPathIdx = inTrackPointFrom.mPathIdx;
-  inTrackPointTo.mSegmentIdx = inTrackPointFrom.mSegmentIdx;
-  inTrackPointTo.t = inTrackPointFrom.t;
-  vec2Copy(inTrackPointTo.mPos, inTrackPointFrom.mPos);
-  vec2Copy(inTrackPointTo.mTangent, inTrackPointFrom.mTangent);
-  inTrackPointTo.mWidth = inTrackPointFrom.mWidth;
-  inTrackPointTo.mInside = inTrackPointFrom.mInside;
-  inTrackPointTo.mDistSqr = inTrackPointFrom.mDistSqr;
+export const trackCopyTrackPoint = (trackPointTo: TrackPointProjection, trackPointFrom: TrackPointProjection) => {
+  trackPointTo.mPathIdx = trackPointFrom.mPathIdx;
+  trackPointTo.mSegmentIdx = trackPointFrom.mSegmentIdx;
+  trackPointTo.t = trackPointFrom.t;
+  vec2Copy(trackPointTo.mPos, trackPointFrom.mPos);
+  vec2Copy(trackPointTo.mTangent, trackPointFrom.mTangent);
+  trackPointTo.mWidth = trackPointFrom.mWidth;
+  trackPointTo.mInside = trackPointFrom.mInside;
+  trackPointTo.mDistSqr = trackPointFrom.mDistSqr;
 };
+
+export const trackWrapSegmentIndex = (segmentIdx: number, segmentCount: number) => (segmentCount <= 0) ? 0 : mathMod(segmentIdx, segmentCount);
 
 /**
  * **inMode**: -1 = main path only, 0 = all paths, 1 = secondary paths only
  */
 export const trackFindPointInTrack = (
-  self: Track, inPos: Vec2, inMainPathHintSegment: number,
-  inMode: -1 | 0 | 1, inTrackPoints: { [pathIdx: number]: TrackPointProjection }
+  self: Track, pos: Vec2, mainPathHintSegment: number,
+  mode: -1 | 0 | 1, trackPoints: { [pathIdx: number]: TrackPointProjection }
 ) => {
   let workSegmentKey = 0;
-  const projectPointToSegment = (inSegments: SplineSegment[], inSegmentIdx: number) => {
-    const segment = inSegments[inSegmentIdx];
-    const kSamples = 8;
+  const projectPointToSegment = (segments: SplineSegment[], segmentIdx: number) => {
+    const segment = segments[segmentIdx];
+    const kSamples = 12;
     let bestT = 0;
     let bestDistSq = Infinity;
 
     for (let i = 0; i <= kSamples; ++i) {
       const t = i / kSamples;
-      const distSq = getDistanceSqrAt(segment, t, inPos);
+      const distSq = getDistanceSqrAt(segment, t, pos);
       if (distSq < bestDistSq) {
         bestDistSq = distSq;
         bestT = t;
@@ -442,12 +444,12 @@ export const trackFindPointInTrack = (
     let left = (bestT > coarseStep) ? bestT - coarseStep : 0;
     let right = (bestT < 1 - coarseStep) ? bestT + coarseStep : 1;
 
-    for (let i = 0; i < 14; ++i) {
+    for (let i = 0; i < 32; ++i) {
       const t1 = (2 * left + right) / 3;
       const t2 = (left + 2 * right) / 3;
 
-      const dist1 = getDistanceSqrAt(segment, t1, inPos);
-      const dist2 = getDistanceSqrAt(segment, t2, inPos);
+      const dist1 = getDistanceSqrAt(segment, t1, pos);
+      const dist2 = getDistanceSqrAt(segment, t2, pos);
 
       if (dist1 <= dist2) {
         right = t2;
@@ -460,7 +462,7 @@ export const trackFindPointInTrack = (
     const trackPoint = workTrackPoints[workSegmentKey] || (workTrackPoints[workSegmentKey] = { mPos: vec2New(), mTangent: vec2New() } as TrackPointProjection);
 
     trackPoint.mPathIdx = -1;
-    trackPoint.mSegmentIdx = inSegmentIdx;
+    trackPoint.mSegmentIdx = segmentIdx;
     trackPoint.t = t;
     splineCalculateSegmentPoint(segment, t, trackPoint.mPos);
     vec2Normalize(splineCalculateSegmentTangent(segment, t, trackPoint.mTangent));
@@ -468,7 +470,7 @@ export const trackFindPointInTrack = (
 
     const tangent = trackPoint.mTangent;
     const normal = vec2New(-tangent.y, tangent.x);
-    const toPos = vec2Sub(vec2NewCopy(inPos), trackPoint.mPos);
+    const toPos = vec2Sub(vec2NewCopy(pos), trackPoint.mPos);
     const signedOffset = vec2Dot(toPos, normal);
 
     trackPoint.mInside = mathJs.abs(signedOffset) <= 0.5 * trackPoint.mWidth;
@@ -476,12 +478,12 @@ export const trackFindPointInTrack = (
     
     return trackPoint;
   };
-  const calcuateBestProjection = (inSegments: SplineSegment[], minSegmentIdx: number, maxSegmentIdx: number) => {
+  const calcuateBestProjection = (segments: SplineSegment[], minSegmentIdx: number, maxSegmentIdx: number) => {
     let bestDistSq = Infinity;
     let bestProjection = null;
 
     for (let i = minSegmentIdx; i <= maxSegmentIdx; ++i) {
-      const res = projectPointToSegment(inSegments, wrapSegmentIndex(i, inSegments.length));
+      const res = projectPointToSegment(segments, trackWrapSegmentIndex(i, segments.length));
       if (res.mDistSqr < bestDistSq) {
         bestDistSq = res.mDistSqr;
         bestProjection = res;
@@ -491,84 +493,50 @@ export const trackFindPointInTrack = (
 
     return bestProjection as TrackPointProjection;
   }
-  const findClosestOnPath = (inSegments: SplineSegment[], inHintSegment: number, inTrackPointIdx: number) => {
-    const segmentLen = inSegments.length;
+  const findClosestOnPath = (segments: SplineSegment[], hintSegment: number, trackPointIdx: number) => {
+    const segmentLen = segments.length;
     let bestProjection = null as TrackPointProjection | null;
 
-    if (segmentLen > 5 && inHintSegment >= 0 && inHintSegment < segmentLen) {
+    if (segmentLen > 5 && hintSegment >= 0 && hintSegment < segmentLen) {
       // Try the hinted segment only -- fast mode
-      const minSegmentIdx = inHintSegment - 2;
-      const maxSegmentIdx = inHintSegment + 2;
+      const minSegmentIdx = hintSegment - 2;
+      const maxSegmentIdx = hintSegment + 2;
       
-      bestProjection = calcuateBestProjection(inSegments, minSegmentIdx, maxSegmentIdx);
+      bestProjection = calcuateBestProjection(segments, minSegmentIdx, maxSegmentIdx);
     } else {
       // Check all segments
-      bestProjection = calcuateBestProjection(inSegments, 0, inSegments.length - 1);
+      bestProjection = calcuateBestProjection(segments, 0, segments.length - 1);
     }
 
     trackCopyTrackPoint(
-      inTrackPoints[inTrackPointIdx] || (inTrackPoints[inTrackPointIdx] = { mPos: vec2New(), mTangent: vec2New() } as TrackPointProjection),
+      trackPoints[trackPointIdx] || (trackPoints[trackPointIdx] = { mPos: vec2New(), mTangent: vec2New() } as TrackPointProjection),
       bestProjection
     );
-    inTrackPoints[inTrackPointIdx].mPathIdx = inTrackPointIdx;
+    trackPoints[trackPointIdx].mPathIdx = trackPointIdx;
   };
 
-  if (inMode !== 1) {
-    if (!inTrackPoints[-1]) {
-      inTrackPoints[-1] = {} as TrackPointProjection;
-    }
-    findClosestOnPath(self.segments, inMainPathHintSegment, -1);
+  if (mode !== 1) {
+    findClosestOnPath(self.segments, mainPathHintSegment, -1);
   }
 
-  if (inMode !== -1) {
+  if (mode !== -1) {
     const pathCount = self.secondaryPaths.length;
     for (let pathIdx = 0; pathIdx < pathCount; ++pathIdx) {
-      if (!inTrackPoints[pathIdx]) {
-        inTrackPoints[pathIdx] = {} as TrackPointProjection;
-      }
       findClosestOnPath(self.secondaryPaths[pathIdx].segments, -1, pathIdx);
     }
   }
 };
 
-export function trackFindPoint(self: Track, pos: Vec2, pathIdx: number, segmentIdx: number, forceMainPath = false, fast = false): TrackFindPointResult | null {
-  const pathCount = self.secondaryPaths.length;
-  const validPathIdx = (pathIdx >= 0 && pathIdx < pathCount) ? pathIdx : -1;
-
-  const mainProjection = findClosestOnPath(self, -1, pos, (validPathIdx === -1) ? segmentIdx : 0, fast);
-  if (!mainProjection) return null;
-
-  if (forceMainPath) {
-    return {
-      projection: mainProjection,
-      mainPathProjection: mainProjection,
-    };
-  }
-
-  let bestProjection = mainProjection;
-
-  const preferredPath = validPathIdx === -1
-    ? mainProjection
-    : findClosestOnPath(self, validPathIdx, pos, segmentIdx, fast);
-
-  if (preferredPath && preferredPath.mDistSqr < bestProjection.mDistSqr) {
-    bestProjection = preferredPath;
-  }
-
-  for (let secondaryIdx = 0; secondaryIdx < pathCount; ++secondaryIdx) {
-    if (secondaryIdx === validPathIdx) continue;
-
-    const projection = findClosestOnPath(self, secondaryIdx, pos, segmentIdx, fast);
-    if (projection && projection.mDistSqr < bestProjection.mDistSqr) {
-      bestProjection = projection;
-    }
-  }
-
-  return {
-    projection: bestProjection,
-    mainPathProjection: (bestProjection.mPathIdx === -1) ? null : mainProjection,
-  };
-}
+export const trackGetTrackWidthAt = (self: Track, pathIdx: number, segmentIdx: number, t: number) => {
+  const segments = (pathIdx === -1)
+    ? self.segments
+    : self.secondaryPaths[pathIdx]?.segments;
+  const segmentLen = segments?.length ?? 0;
+  
+  if (segmentLen === 0) return 0;
+  const segment = segments[trackWrapSegmentIndex(segmentIdx, segments.length)];
+  return mathLerp(segment.w0, segment.w1, t);
+};
 
 function sampleTrackSegment(
   segment: SplineSegment,
@@ -589,11 +557,6 @@ function sampleTrackSegment(
     width: mathLerp(segment.w0, segment.w1, tMid),
   });
   sampleTrackSegment(segment, tMid, t1, tanMid, tan1, depth + 1, samples);
-}
-
-function wrapSegmentIndex(segmentIdx: number, segmentCount: number) {
-  if (segmentCount <= 0) return 0;
-  return mathMod(segmentIdx, segmentCount);
 }
 
 function getDistanceSqrAt(segment: SplineSegment, t: number, pos: Vec2) {
@@ -668,7 +631,7 @@ function findClosestOnPath(self: Track, pathIdx: number, pos: Vec2, hintSegmentI
 
   const hinted = [hintSegmentIdx - 2, hintSegmentIdx - 1, hintSegmentIdx, hintSegmentIdx + 1, hintSegmentIdx + 2];
   for (const idx of hinted) {
-    const wrapped = wrapSegmentIndex(idx, segmentCount);
+    const wrapped = trackWrapSegmentIndex(idx, segmentCount);
     if (!uniqueCandidates.has(wrapped)) {
       uniqueCandidates.add(wrapped);
       candidateIndices.push(wrapped);

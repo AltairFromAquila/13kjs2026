@@ -32,18 +32,18 @@ export const mathTan = (x: number) => mathJs.tan(x);
 
 export const mathMod = (a: number, b: number) => ((a % b) + b) % b;
 
-export const mathClamp = (a: number, inMin: number, inMax: number) => (a < inMin) ? inMin : (a > inMax) ? inMax : a;
+export const mathClamp = (a: number, min: number, max: number) => (a < min) ? min : (a > max) ? max : a;
 
-export const mathLerp = (a: number, b: number, inRatio: number) => a + (b - a) * inRatio;
+export const mathLerp = (a: number, b: number, ratio: number) => a + (b - a) * ratio;
 
 export const mathSmoothstep = (x: number) => {
   const t = mathJs.max(0, mathJs.min(1, x));
   return t * t * (3 - (2 * t));
 };
 
-export const mathPingPong = (v: number, inMin: number, inMax: number) => {
-  const low = inMin < inMax ? inMin : inMax;
-  const high = inMin < inMax ? inMax : inMin;
+export const mathPingPong = (v: number, min: number, max: number) => {
+  const low = min < max ? min : max;
+  const high = min < max ? max : min;
   const length = high - low;
 
   if (length === 0) {
@@ -118,18 +118,24 @@ export const vec2Distance = (v1: Vec2, v2: Vec2) => {
   return mathJs.sqrt(dx * dx + dy * dy);
 };
 
-export const splineCalculateCatmullRom = (inPts: SplinePoint[], inAlpha: number, outSegments: SplineSegment[]) => {
-  const len = inPts.length - 3;
+export const vec2Lerp = (self: Vec2, v: Vec2, ratio: number) => (
+  self.x = mathLerp(self.x, v.x, ratio),
+  self.y = mathLerp(self.y, v.y, ratio),
+  self
+);
+
+export const splineCalculateCatmullRom = (points: SplinePoint[], alpha: number, outSegments: SplineSegment[]) => {
+  const len = points.length - 3;
 
   for (let idx = 0; idx < len; ++idx) {
-    const p0 = inPts[idx];
-    const p1 = inPts[idx + 1];
-    const p2 = inPts[idx + 2];
-    const p3 = inPts[idx + 3];
+    const p0 = points[idx];
+    const p1 = points[idx + 1];
+    const p2 = points[idx + 2];
+    const p3 = points[idx + 3];
     const tension = p1.tension;
-    const t01 = mathJs.max(mathJs.pow(vec2Distance(p0, p1), inAlpha), kMathEpsilon);
-    const t12 = mathJs.max(mathJs.pow(vec2Distance(p1, p2), inAlpha), kMathEpsilon);
-    const t23 = mathJs.max(mathJs.pow(vec2Distance(p2, p3), inAlpha), kMathEpsilon);
+    const t01 = mathJs.max(mathJs.pow(vec2Distance(p0, p1), alpha), kMathEpsilon);
+    const t12 = mathJs.max(mathJs.pow(vec2Distance(p1, p2), alpha), kMathEpsilon);
+    const t23 = mathJs.max(mathJs.pow(vec2Distance(p2, p3), alpha), kMathEpsilon);
 
     const dp10 = vec2Sub(vec2NewCopy(p1), p0);
     const dp20 = vec2Sub(vec2NewCopy(p2), p0);
@@ -199,37 +205,39 @@ export const splineCalculateCatmullRom = (inPts: SplinePoint[], inAlpha: number,
 };
 
 export const splineCalculateSegmentPoint = (
-  inSegment: SplineSegment, t: number, outVec: Vec2
+  segment: SplineSegment, t: number, outVec: Vec2
 ) => (t === 0)
-  ? inSegment.d
+  ? segment.d
   : vec2Add(
       vec2MulScalar(
         vec2Add(
           vec2MulScalar(
             vec2Add(
-              vec2MulScalar(vec2Copy(outVec, inSegment.a), t),
-              inSegment.b
+              vec2MulScalar(vec2Copy(outVec, segment.a), t),
+              segment.b
             ),
             t
           ),
-          inSegment.c
+          segment.c
         ),
         t
       ),
-      inSegment.d
+      segment.d
     );
 
 export const splineCalculateSegmentTangent = (
-  inSegment: SplineSegment, t: number, outVec: Vec2
-) => (t === 0)
-  ? inSegment.c
-  : vec2Add(
-      vec2MulScalar(
-        vec2Add(
-          vec2MulScalar(vec2Copy(outVec, inSegment.a), 3 * t),
-          vec2MulScalar(vec2NewCopy(inSegment.b), 2)
+  segment: SplineSegment, t: number, outVec: Vec2
+) => vec2Normalize(
+  (t === 0)
+    ? segment.c
+    : vec2Add(
+        vec2MulScalar(
+          vec2Add(
+            vec2MulScalar(vec2Copy(outVec, segment.a), 3 * t),
+            vec2MulScalar(vec2NewCopy(segment.b), 2)
+          ),
+          t
         ),
-        t
-      ),
-      inSegment.c
-    );
+        segment.c
+      )
+  );
