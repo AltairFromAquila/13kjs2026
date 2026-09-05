@@ -92,7 +92,7 @@ export const racerNew = (skeleton: SkeletonNode[], skeletonShapes: SkeletonNodeS
   mAnimTime: 0,
   mAnimSpeed: 1,
 
-  mController: { mDesiredDirection: vec2New(), mPreviusSegmentT: 0, mReactionTimer: 0 },
+  mController: { mDesiredDirection: vec2New(), mPreviusSegmentT: 0, mReactionTimer: 0, mIsBlockingPlayer: false, mBlockPlayerTimer: 0 },
 
   mIsPlayer: false,
 });
@@ -135,6 +135,10 @@ export const racerSetAngle = (self: Racer, angle: number) => {
 export const racerSetAngleFromVector = (self: Racer, vec: Vec2) => racerSetAngle(self, mathJs.atan2(vec.y, vec.x));
 
 export const racerFixedTick = (self: Racer, delta: number) => {
+  if (!self.mIsPlayer) {
+    controllerProcessAIForRacer(self.mController, self, delta);
+  }
+
   vec2MulScalar(
     vec2Copy(self.mVel, self.mController.mDesiredDirection),
     mathLerp(60, 120, mathJs.random())
@@ -164,13 +168,6 @@ export const racerFixedTick = (self: Racer, delta: number) => {
     self.mLastValidPathIdx = bestPathIdx;
   } else {
     // Activate autopilot to return to the track
-  }
-
-  if (!self.mIsPlayer) {
-    self.mController.mReactionTimer -= delta;
-    if (self.mController.mReactionTimer <= 0) {
-      controllerProcessAIForRacer(self.mController, self);
-    }
   }
 };
 

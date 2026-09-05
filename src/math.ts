@@ -112,11 +112,15 @@ export const vec2Normalize = (self: Vec2) => {
   return self;
 };
 
-export const vec2Distance = (v1: Vec2, v2: Vec2) => {
+export const vec2Angle = (v: Vec2) => mathJs.atan2(v.y, v.x);
+
+export const vec2DistanceSqr = (v1: Vec2, v2: Vec2) => {
   const dx = v2.x - v1.x;
   const dy = v2.y - v1.y;
-  return mathJs.sqrt(dx * dx + dy * dy);
+  return dx * dx + dy * dy;
 };
+
+export const vec2Distance = (v1: Vec2, v2: Vec2) => mathJs.sqrt(vec2DistanceSqr(v1, v2));
 
 export const vec2Lerp = (self: Vec2, v: Vec2, ratio: number) => (
   self.x = mathLerp(self.x, v.x, ratio),

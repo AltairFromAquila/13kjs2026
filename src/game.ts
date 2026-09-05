@@ -46,19 +46,19 @@ export const Game: Game = {
       racerDataGetSkeleton('#faf', '#000', '#b4b', '#f77', '#f00'),
       racerDataGetSkeletonShapes('#faf', '#b4b')
     ),
-    // racerNew(
-    //   racerDataGetSkeleton('#afa', '#000', '#4b4', '#fc5', '#fa0'),
-    //   racerDataGetSkeletonShapes('#afa', '#4b4')
-    // ),
-    // racerNew(
-    //   racerDataGetSkeleton('#afa', '#000', '#4b4', '#fc5', '#fa0'),
-    //   racerDataGetSkeletonShapes('#afa', '#4b4')
-    // ),
+    racerNew(
+      racerDataGetSkeleton('#fff', '#0af', '#aaa', '#ffc', '#ff7'),
+      racerDataGetSkeletonShapes('#fff', '#aaa')
+    ),
+    racerNew(
+      racerDataGetSkeleton('#444', '#fff', '#000', '#f55', '#f00'),
+      racerDataGetSkeletonShapes('#444', '#000')
+    ),
   ],
 }
 
 export const gameInit = () => {
-  trackLoadData(Game.mTrack, tracks[1]);
+  trackLoadData(Game.mTrack, tracks[2]);
   trackDrawTexture(Game.mTrack);
   cloudsGenerate();
   
