@@ -70,6 +70,8 @@ export interface Racer {
   mAnimTime: number;
   mAnimSpeed: number;
 
+  mStamina: number;
+
   mIsPlayer: boolean;
 }
 
@@ -92,8 +94,9 @@ export const racerNew = (skeleton: SkeletonNode[], skeletonShapes: SkeletonNodeS
   mAnimTime: 0,
   mAnimSpeed: 1,
 
-  mController: { mDesiredDirection: vec2New(), mPreviusSegmentT: 0, mReactionTimer: 0, mIsBlockingPlayer: false, mBlockPlayerTimer: 0 },
+  mController: { mDesiredDirection: vec2New(), mPreviousSegmentT: 0, mReactionTimer: 0, mIsBlockingPlayer: false, mBlockPlayerTimer: 0, mIsWaitingForStamina: false, mIsGalloping: false, mPreviousSegmentIdx: -1, mGallopingReactionTimer: 0 },
 
+  mStamina: 1,
   mIsPlayer: false,
 });
 
@@ -139,9 +142,24 @@ export const racerFixedTick = (self: Racer, delta: number) => {
     controllerProcessAIForRacer(self.mController, self, delta);
   }
 
+  let gallopingFactor = 1;
+  if (self.mController.mIsGalloping) {
+    gallopingFactor = 1.5;
+    self.mStamina -= delta * 0.1; // Decrease stamina while galloping
+
+    if (self.mStamina < 0) {
+      self.mStamina = 0;
+    }
+  } else if (self.mStamina < 1) {
+    self.mStamina += delta * 0.2; // Regenerate stamina while not galloping
+    if (self.mStamina > 1) {
+      self.mStamina = 1;
+    }
+  }
+
   vec2MulScalar(
     vec2Copy(self.mVel, self.mController.mDesiredDirection),
-    mathLerp(60, 120, mathJs.random())
+    mathLerp(60, 120, mathJs.random()) * gallopingFactor
   );
   racerSetAngleFromVector(self, self.mVel);
 

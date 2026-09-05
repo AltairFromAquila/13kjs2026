@@ -1,20 +1,26 @@
 import { Game } from "../game";
-import { kMathEpsilon, mathClamp, mathJs, splineCalculateSegmentPoint, splineCalculateSegmentTangent, vec2Add, vec2Copy, vec2Distance, vec2DistanceSqr, vec2Dot, vec2Lerp, vec2MulScalar, vec2New, vec2Normalize, vec2Sub, type Vec2 } from "../math";
+import { kMathEpsilon, mathClamp, mathJs, splineCalculateSegmentPoint, splineCalculateSegmentTangent, vec2Add, vec2Angle, vec2Copy, vec2Distance, vec2DistanceSqr, vec2Dot, vec2Lerp, vec2MulScalar, vec2New, vec2NewCopy, vec2Normalize, vec2Sub, type Vec2 } from "../math";
 import type { Racer } from "./racer";
 import { trackGetTrackWidthAt, trackWrapSegmentIndex } from "./track";
 
 export interface AIController {
   mDesiredDirection: Vec2;
+  mIsGalloping: boolean;
 
-  mPreviusSegmentT: number;
+  mPreviousSegmentIdx: number;
+  mPreviousSegmentT: number;
+
   mBlockPlayerTimer: number;
+  mGallopingReactionTimer: number;
   mReactionTimer: number;
-
+  
+  mIsWaitingForStamina: boolean;
   mIsBlockingPlayer: boolean;
 }
 
 const kAIReactionTimeMin = 0.2;
 const kAIReactionTimeMaxDelta = 0.1;
+const kAIGallopingReactionTime = 0.06;
 const kAIBlockPlayerChance = 0.3;
 const kAISafeWidthFactor = 0.8;
 const kAIBlockPlayerSafeWidthFactor = 0.9;
@@ -22,6 +28,56 @@ const kAIBlockPlayerSafeWidthFactor = 0.9;
 export const controllerProcessAIForRacer = (self: AIController, racer: Racer, delta: number) => {
   self.mBlockPlayerTimer -= delta;
   self.mReactionTimer -= delta;
+
+  if (self.mIsWaitingForStamina && racer.mStamina > 0.8) {
+    self.mIsWaitingForStamina = false;
+  } else if (self.mIsGalloping && racer.mStamina <= 0) {
+    self.mIsGalloping = false;
+    self.mIsWaitingForStamina = true; 
+  }
+
+  if (self.mGallopingReactionTimer > 0) {
+    self.mGallopingReactionTimer -= delta;
+  } else {
+    const trackPoint = racer.mTrackPoints[-1];
+
+    if (!self.mIsWaitingForStamina) {
+      let aheadSegmentIdx = trackPoint.mSegmentIdx;
+      let aheadT = trackPoint.t;
+      let workVec1 = vec2NewCopy(trackPoint.mPos);
+      let workVec2 = vec2New();
+      let distanceSqr = 0;
+      const targetDistanceSqr = 120 * 120;
+
+      while (distanceSqr < targetDistanceSqr) {
+        aheadT += 0.25;
+        if (aheadT > 1) {
+          --aheadT;
+          aheadSegmentIdx = trackWrapSegmentIndex(aheadSegmentIdx + 1, Game.mTrack.segments.length);
+        }
+
+        distanceSqr += vec2DistanceSqr(
+          splineCalculateSegmentPoint(Game.mTrack.segments[aheadSegmentIdx], aheadT, workVec2),
+          workVec1
+        );
+        vec2Copy(workVec1, workVec2);
+      }
+
+      const tangent0 = trackPoint.mTangent;
+      const tangent1 = splineCalculateSegmentTangent(Game.mTrack.segments[aheadSegmentIdx], aheadT, workVec1);
+      const alignment = vec2Dot(tangent0, tangent1) ;
+
+      if (alignment > 0.75) {
+        self.mIsGalloping = self.mIsGalloping || mathJs.random() < 0.05; // Use values between 0.01 and 0.05 for a more balanced galloping behavior
+      } else {
+        self.mIsGalloping = false;
+        self.mIsWaitingForStamina = racer.mStamina < 0.3;
+      }
+    }
+
+    self.mGallopingReactionTimer += kAIGallopingReactionTime;
+  }
+
   if (self.mReactionTimer > 0) return;
 
   const trackPoint = racer.mTrackPoints[-1];
@@ -39,8 +95,8 @@ export const controllerProcessAIForRacer = (self: AIController, racer: Racer, de
     //   They are behind but very close
     //   We are not too close to the player (to avoid being too unfair with the player)
     if (
-      playerDistanceSqr < (isPlayerAhead ? 320 * 320 : 120 * 120) &&
-      playerDistanceSqr > (64 * 64) &&
+      playerDistanceSqr < (isPlayerAhead ? 240 * 240 : 64 * 64) &&
+      playerDistanceSqr > (32 * 32) &&
       mathJs.random() < kAIBlockPlayerChance
     ) {
       self.mIsBlockingPlayer = mathJs.random() < kAIBlockPlayerChance;
@@ -49,8 +105,7 @@ export const controllerProcessAIForRacer = (self: AIController, racer: Racer, de
     self.mBlockPlayerTimer = 1 + (mathJs.random() * 4);
   }
 
-  // I'm assuming the track points are separated enough so its impossible for the AI to skip a track point in a single tick
-  if (trackPoint.t < self.mPreviusSegmentT) {
+  if (trackPoint.mSegmentIdx !== self.mPreviousSegmentIdx) {
     const segment = Game.mTrack.segments[trackPoint.mSegmentIdx];
 
     if (segment) {
@@ -71,7 +126,7 @@ export const controllerProcessAIForRacer = (self: AIController, racer: Racer, de
     }
   } else {
     // Calculate desired direction based on a delta between future track point and current track point
-    const deltaT = (trackPoint.t - self.mPreviusSegmentT) || kMathEpsilon;
+    const deltaT = (trackPoint.t - self.mPreviousSegmentT) || kMathEpsilon;
     let nextT = trackPoint.t + deltaT;
     let nextTSegmentIdx = trackPoint.mSegmentIdx;
 
@@ -148,6 +203,7 @@ export const controllerProcessAIForRacer = (self: AIController, racer: Racer, de
     }
   }
 
-  self.mPreviusSegmentT = trackPoint.t;
+  self.mPreviousSegmentIdx = trackPoint.mSegmentIdx;
+  self.mPreviousSegmentT = trackPoint.t;
   self.mReactionTimer += kAIReactionTimeMin + mathJs.random() * kAIReactionTimeMaxDelta;
 };

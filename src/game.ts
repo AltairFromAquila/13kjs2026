@@ -58,7 +58,7 @@ export const Game: Game = {
 }
 
 export const gameInit = () => {
-  trackLoadData(Game.mTrack, tracks[2]);
+  trackLoadData(Game.mTrack, tracks[4]);
   trackDrawTexture(Game.mTrack);
   cloudsGenerate();
   

@@ -599,7 +599,7 @@ function projectPointToSegment(pathIdx: number, segmentIdx: number, segment: Spl
 
   const t = 0.5 * (left + right);
   const point = splineCalculateSegmentPoint(segment, t, vec2New());
-  const tangent = vec2Normalize(splineCalculateSegmentTangent(segment, t, vec2New()));
+  const tangent = splineCalculateSegmentTangent(segment, t, vec2New());
   const normal = vec2New(-tangent.y, tangent.x);
   const toPos = vec2Sub(vec2NewCopy(pos), point);
   const signedOffset = vec2Dot(toPos, normal);
