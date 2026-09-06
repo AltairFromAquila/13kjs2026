@@ -1,6 +1,6 @@
 import { racerAnimations, type SkeletonNode, type SkeletonNodeShapes } from "../data/racer.data";
 import { Game } from "../game";
-import { kMathEpsilon, kMathHalfPi, kMathPi, kMathTau, mathClamp, mathCos, mathJs, mathLerp, mathMod, mathPingPong, mathSin, vec2Add, vec2Copy, vec2CopyFromTuple, vec2MulScalar, vec2New, vec2NewCopy, type Vec2 } from "../math";
+import { kMathEpsilon, kMathHalfPi, kMathPi, kMathTau, mathClamp, mathCos, mathJs, mathLerp, mathMod, mathPingPong, mathSin, vec2Add, vec2ClampLength, vec2Copy, vec2CopyFromTuple, vec2Dot, vec2Length, vec2LengthSqr, vec2MulScalar, vec2New, vec2NewCopy, vec2Normalize, type Vec2 } from "../math";
 import { ctxBeginPath, ctxClosePathAndFill, ctxLineTo, ctxMoveTo, ctxSetFillStyle } from "../sys/context";
 import { newCircleCollider, type CircleCollider } from "./collision";
 import { controllerProcessAIForRacer, type AIController } from "./controllers";
@@ -8,6 +8,13 @@ import { trackCopyTrackPoint, trackFindPointInTrack, type TrackPointProjection }
 
 const kRacerColRadius = 3 as const;
 const kRacerColDiameter = 6 as const;
+
+const kRacerMaxJogSpeed = 64 as const;
+const kRacerMaxSpeed = 120 as const;
+const kRacerMaxSpeedWhileGalloping = 160 as const;
+
+const kRacerGallopingMaxSpeedIncrement = 10 as const;
+const kRacerGallopingMaxSpeedDecrease = -0.5 as const;
 
 const workTransformedNodes: TransformedRacerNode[] = []
 for (let i = 0; i < 50; ++i) {
@@ -66,6 +73,9 @@ export interface Racer {
   mVel: Vec2;
   mAngle: number;
 
+  mMaxSpeed: number;
+  mJogTime: number;
+
   mAnimIdx: number;
   mAnimTime: number;
   mAnimSpeed: number;
@@ -90,11 +100,14 @@ export const racerNew = (skeleton: SkeletonNode[], skeletonShapes: SkeletonNodeS
   mVel: { x: 0, y: 0 },
   mAngle: 0,
 
+  mMaxSpeed: kRacerMaxJogSpeed,
+  mJogTime: 0,
+
   mAnimIdx: 3,
   mAnimTime: 0,
   mAnimSpeed: 1,
 
-  mController: { mDesiredDirection: vec2New(), mPreviousSegmentT: 0, mReactionTimer: 0, mIsBlockingPlayer: false, mBlockPlayerTimer: 0, mIsWaitingForStamina: false, mIsGalloping: false, mPreviousSegmentIdx: -1, mGallopingReactionTimer: 0 },
+  mController: { mDesiredDirection: vec2New(), mPreviousSegmentT: 0, mReactionTimer: 0, mIsBlockingPlayer: false, mBlockPlayerTimer: 0, mIsWaitingForStamina: false, mIsGalloping: false, mPreviousSegmentIdx: -1, mGallopingReactionTimer: 0, mWasStuck: false, mGallopTapPressed: false },
 
   mStamina: 1,
   mIsPlayer: false,
@@ -108,6 +121,10 @@ export const racerReset = (self: Racer) => {
   self.mBackCol.pos.x = -kRacerColDiameter;
 
   self.mLastValidPathIdx = -1;
+
+  self.mMaxSpeed = kRacerMaxJogSpeed;
+  self.mJogTime = 0;
+  self.mStamina = 1;
 };
 
 export const racerSetupTrackPoints = (self: Racer, startTrackPoint: TrackPointProjection) => {
@@ -142,10 +159,8 @@ export const racerFixedTick = (self: Racer, delta: number) => {
     controllerProcessAIForRacer(self.mController, self, delta);
   }
 
-  let gallopingFactor = 1;
   if (self.mController.mIsGalloping) {
-    gallopingFactor = 1.5;
-    self.mStamina -= delta * 0.1; // Decrease stamina while galloping
+    self.mStamina -= delta * 0.1; // Decrease stamina continuously while galloping
 
     if (self.mStamina < 0) {
       self.mStamina = 0;
@@ -157,11 +172,69 @@ export const racerFixedTick = (self: Racer, delta: number) => {
     }
   }
 
-  vec2MulScalar(
-    vec2Copy(self.mVel, self.mController.mDesiredDirection),
-    mathLerp(60, 120, mathJs.random()) * gallopingFactor
-  );
-  racerSetAngleFromVector(self, self.mVel);
+  let acceleration = 4;
+  if (vec2LengthSqr(self.mVel) > 0 && vec2LengthSqr(self.mController.mDesiredDirection) > 0) {
+    const velDir = vec2Normalize(vec2NewCopy(self.mVel));
+    const velAlignment = vec2Dot(self.mController.mDesiredDirection, velDir);
+    const velAlignmentRatio = (velAlignment - 1) * -0.5; // remap to [0, 1] range, where 0 is same direction, 1 is opposite direction
+
+    acceleration = mathLerp(4, 8, velAlignmentRatio);
+  }
+
+  if (self.mController.mIsGalloping) {
+    self.mMaxSpeed = mathClamp(
+      self.mMaxSpeed + (self.mController.mGallopTapPressed
+        ? kRacerGallopingMaxSpeedIncrement
+        : kRacerGallopingMaxSpeedDecrease),
+      kRacerMaxSpeed,
+      kRacerMaxSpeedWhileGalloping
+    );
+  } else if (self.mJogTime < 1) {
+    if (vec2LengthSqr(self.mVel) > kRacerMaxJogSpeed * kRacerMaxJogSpeed * 0.9) {
+      self.mJogTime += delta / 3;
+    } else {
+      self.mJogTime -= delta / 3;
+      if (self.mJogTime < 0) {
+        self.mJogTime = 0;
+      }
+    }
+  } else {
+    if (vec2LengthSqr(self.mVel) > kRacerMaxJogSpeed * kRacerMaxJogSpeed * 0.25) {
+      if (self.mMaxSpeed > kRacerMaxSpeed) {
+        self.mMaxSpeed += kRacerGallopingMaxSpeedDecrease * ((self.mStamina < 0.3) ? 1.5 : 1);
+      }
+      if (self.mMaxSpeed < kRacerMaxSpeed) {
+        self.mMaxSpeed = kRacerMaxSpeed;
+      }
+    } else {
+      self.mMaxSpeed = kRacerMaxJogSpeed;
+      self.mJogTime -= delta / 3;
+      if (self.mJogTime < 0) {
+        self.mJogTime = 0;
+      }
+    }
+  }
+
+  const hasInput = vec2LengthSqr(self.mController.mDesiredDirection) > 0;
+  const motion = vec2MulScalar(vec2NewCopy(self.mController.mDesiredDirection), acceleration);
+  vec2Add(self.mVel, motion);
+
+  // Fixed-step damping to avoid endless coasting while keeping steering responsive.
+  vec2MulScalar(self.mVel, hasInput ? 0.98 : 0.9);
+  if (vec2LengthSqr(self.mVel) < 0.01) {
+    self.mVel.x = 0;
+    self.mVel.y = 0;
+  }
+
+  vec2ClampLength(self.mVel, 0, self.mMaxSpeed);
+
+  // vec2MulScalar(
+  //   vec2Copy(self.mVel, self.mController.mDesiredDirection),
+  //   mathLerp(60, 120, mathJs.random()) * gallopingFactor
+  // );
+  if (vec2LengthSqr(self.mVel) > 0) {
+    racerSetAngleFromVector(self, self.mVel);
+  }
 
   vec2Add(self.mPos, vec2MulScalar(vec2NewCopy(self.mVel), delta));
   trackFindPointInTrack(Game.mTrack, self.mPos, -1, 0, self.mTrackPoints);
@@ -170,10 +243,11 @@ export const racerFixedTick = (self: Racer, delta: number) => {
   let bestDistance = Infinity;
   let bestPathIdx = -1;
   for (let i = 0; i < Game.mTrack.secondaryPaths.length; ++i) {
-    if (self.mTrackPoints[i].mInside) {
+    const secondaryTrackPoint = self.mTrackPoints[i];
+    if (secondaryTrackPoint?.mInside) {
       isInsideAnyPath = true;
       
-      const dist = self.mTrackPoints[i].mDistSqr;
+      const dist = secondaryTrackPoint.mDistSqr;
       if (dist < bestDistance) {
         // This would be a bug if two track segments were too close with different widths, but for this game it's not a problem.
         bestDistance = dist;
@@ -181,10 +255,22 @@ export const racerFixedTick = (self: Racer, delta: number) => {
       }
     }
   }
+  const mainTrackPoint = self.mTrackPoints[-1];
+  if (mainTrackPoint?.mInside) {
+    isInsideAnyPath = true;
+      
+    const dist = mainTrackPoint.mDistSqr;
+    if (dist < bestDistance) {
+      // This would be a bug if two track segments were too close with different widths, but for this game it's not a problem.
+      bestDistance = dist;
+      bestPathIdx = -1;
+    }
+  }
 
   if (isInsideAnyPath) {
     self.mLastValidPathIdx = bestPathIdx;
   } else {
+    console.log('Racer is outside of all paths!');
     // Activate autopilot to return to the track
   }
 };

@@ -1,10 +1,11 @@
 import { Game } from "../game";
-import { kMathEpsilon, mathClamp, mathJs, splineCalculateSegmentPoint, splineCalculateSegmentTangent, vec2Add, vec2Angle, vec2Copy, vec2Distance, vec2DistanceSqr, vec2Dot, vec2Lerp, vec2MulScalar, vec2New, vec2NewCopy, vec2Normalize, vec2Sub, type Vec2 } from "../math";
+import { kMathEpsilon, mathClamp, mathJs, splineCalculateSegmentPoint, splineCalculateSegmentTangent, vec2Add, vec2Copy, vec2Distance, vec2DistanceSqr, vec2Dot, vec2Lerp, vec2MulScalar, vec2New, vec2NewCopy, vec2Normalize, vec2Sub, type Vec2 } from "../math";
 import type { Racer } from "./racer";
 import { trackGetTrackWidthAt, trackWrapSegmentIndex } from "./track";
 
 export interface AIController {
   mDesiredDirection: Vec2;
+  mGallopTapPressed: boolean;
   mIsGalloping: boolean;
 
   mPreviousSegmentIdx: number;
@@ -16,6 +17,7 @@ export interface AIController {
   
   mIsWaitingForStamina: boolean;
   mIsBlockingPlayer: boolean;
+  mWasStuck: boolean;
 }
 
 const kAIReactionTimeMin = 0.2;
@@ -24,10 +26,17 @@ const kAIGallopingReactionTime = 0.06;
 const kAIBlockPlayerChance = 0.3;
 const kAISafeWidthFactor = 0.8;
 const kAIBlockPlayerSafeWidthFactor = 0.9;
+const kAIGallopLookaheadTOffsets = [0.1, 0.25, 0.5, 0.75, 1] as const;
+const kAIGallopLookaheadWeights = [0.35, 0.25, 0.2, 0.12, 0.08] as const;
+const kAIGallopEnterScore = 0.95;
+const kAIGallopKeepScore = 0.85;
+const kAIGallopStartStamina = 0.55;
+const kAIGallopKeepStamina = 0.15;
 
 export const controllerProcessAIForRacer = (self: AIController, racer: Racer, delta: number) => {
   self.mBlockPlayerTimer -= delta;
   self.mReactionTimer -= delta;
+  self.mGallopTapPressed = false;
 
   if (self.mIsWaitingForStamina && racer.mStamina > 0.8) {
     self.mIsWaitingForStamina = false;
@@ -40,38 +49,43 @@ export const controllerProcessAIForRacer = (self: AIController, racer: Racer, de
     self.mGallopingReactionTimer -= delta;
   } else {
     const trackPoint = racer.mTrackPoints[-1];
+    const wasGalloping = self.mIsGalloping;
 
     if (!self.mIsWaitingForStamina) {
-      let aheadSegmentIdx = trackPoint.mSegmentIdx;
-      let aheadT = trackPoint.t;
-      let workVec1 = vec2NewCopy(trackPoint.mPos);
-      let workVec2 = vec2New();
-      let distanceSqr = 0;
-      const targetDistanceSqr = 120 * 120;
+      const tangent0 = trackPoint.mTangent;
+      let gallopSafetyScore = 0;
 
-      while (distanceSqr < targetDistanceSqr) {
-        aheadT += 0.25;
-        if (aheadT > 1) {
-          --aheadT;
+      for (let i = 0; i < kAIGallopLookaheadTOffsets.length; ++i) {
+        let aheadSegmentIdx = trackPoint.mSegmentIdx;
+        let aheadT = trackPoint.t + kAIGallopLookaheadTOffsets[i];
+        while (aheadT > 1) {
+          aheadT -= 1;
           aheadSegmentIdx = trackWrapSegmentIndex(aheadSegmentIdx + 1, Game.mTrack.segments.length);
         }
 
-        distanceSqr += vec2DistanceSqr(
-          splineCalculateSegmentPoint(Game.mTrack.segments[aheadSegmentIdx], aheadT, workVec2),
-          workVec1
-        );
-        vec2Copy(workVec1, workVec2);
+        const tangent = splineCalculateSegmentTangent(Game.mTrack.segments[aheadSegmentIdx], aheadT, vec2New());
+        const alignment = vec2Dot(tangent0, tangent);
+        const safety = mathClamp((alignment + 1) * 0.5, 0, 1);
+
+        gallopSafetyScore += safety * kAIGallopLookaheadWeights[i];
       }
 
-      const tangent0 = trackPoint.mTangent;
-      const tangent1 = splineCalculateSegmentTangent(Game.mTrack.segments[aheadSegmentIdx], aheadT, workVec1);
-      const alignment = vec2Dot(tangent0, tangent1) ;
+      const canStartGalloping = racer.mStamina >= kAIGallopStartStamina;
+      const canKeepGalloping = racer.mStamina >= kAIGallopKeepStamina;
 
-      if (alignment > 0.75) {
-        self.mIsGalloping = self.mIsGalloping || mathJs.random() < 0.05; // Use values between 0.01 and 0.05 for a more balanced galloping behavior
-      } else {
-        self.mIsGalloping = false;
-        self.mIsWaitingForStamina = racer.mStamina < 0.3;
+      if (self.mIsGalloping) {
+        if (gallopSafetyScore < kAIGallopKeepScore || !canKeepGalloping) {
+          self.mIsGalloping = false;
+          self.mIsWaitingForStamina = racer.mStamina < kAIGallopStartStamina;
+          console.log('Stopped galloping', gallopSafetyScore);
+        }
+      } else if (canStartGalloping && gallopSafetyScore >= kAIGallopEnterScore) {
+        self.mIsGalloping = true;
+        console.log('Started galloping', gallopSafetyScore);
+      }
+
+      if (self.mIsGalloping) {
+        self.mGallopTapPressed = !wasGalloping || mathJs.random() < 0.5;
       }
     }
 
@@ -105,7 +119,19 @@ export const controllerProcessAIForRacer = (self: AIController, racer: Racer, de
     self.mBlockPlayerTimer = 1 + (mathJs.random() * 4);
   }
 
-  if (trackPoint.mSegmentIdx !== self.mPreviousSegmentIdx) {
+  if (self.mWasStuck) {
+    const targetSegmentIdx = trackPoint.t > 0.5
+      ? trackWrapSegmentIndex(trackPoint.mSegmentIdx + 1, Game.mTrack.segments.length)
+      : trackPoint.mSegmentIdx;
+    const nextPos = splineCalculateSegmentPoint(Game.mTrack.segments[targetSegmentIdx], 0.5, vec2New());
+
+    vec2Normalize(
+      vec2Sub(
+        vec2Copy(self.mDesiredDirection, nextPos),
+        racer.mPos
+      )
+    );
+  } else if (trackPoint.mSegmentIdx !== self.mPreviousSegmentIdx) {
     const segment = Game.mTrack.segments[trackPoint.mSegmentIdx];
 
     if (segment) {
@@ -126,8 +152,8 @@ export const controllerProcessAIForRacer = (self: AIController, racer: Racer, de
     }
   } else {
     // Calculate desired direction based on a delta between future track point and current track point
-    const deltaT = (trackPoint.t - self.mPreviousSegmentT) || kMathEpsilon;
-    let nextT = trackPoint.t + deltaT;
+    const deltaT = mathJs.max(trackPoint.t - self.mPreviousSegmentT, 0.06);
+    let nextT = trackPoint.t + (deltaT * 2); // Look ahead twice the current deltaT
     let nextTSegmentIdx = trackPoint.mSegmentIdx;
 
     if (nextT > 1) {
@@ -138,7 +164,7 @@ export const controllerProcessAIForRacer = (self: AIController, racer: Racer, de
         splineCalculateSegmentPoint(Game.mTrack.segments[nextSegment], 1, vec2New())
       ) || kMathEpsilon;
 
-      nextT = mathJs.min(24 / nextSegmentLength, 1); // 24 is the distance we want to look ahead, we divide by the segment length to get the t value
+      nextT = mathJs.min(92 / nextSegmentLength, 1); // 92 is the distance we want to look ahead, we divide by the segment length to get the t value
       nextTSegmentIdx = nextSegment;
     }
     const nextPos = splineCalculateSegmentPoint(Game.mTrack.segments[nextTSegmentIdx], nextT, vec2New());
@@ -199,6 +225,25 @@ export const controllerProcessAIForRacer = (self: AIController, racer: Racer, de
           ),
           racer.mPos
         )
+      );
+    }
+  }
+
+  if (self.mWasStuck) {
+    self.mWasStuck = false;
+  } else if (vec2Dot(racer.mVel, racer.mVel) > 0) {
+    const velDir = vec2Normalize(vec2NewCopy(racer.mVel));
+    const velAlignment = vec2Dot(self.mDesiredDirection, velDir);
+    const velAlignmentRatio = (velAlignment - 1) * -0.5; // remap to [0, 1] range, where 0 is same direction, 1 is opposite direction
+    
+    if (velAlignmentRatio > 0.5) {
+      vec2MulScalar(self.mDesiredDirection, 0);
+      self.mWasStuck = true;
+    } else {
+      vec2Lerp(
+        self.mDesiredDirection,
+        vec2MulScalar(velDir, -1),
+        mathJs.min(velAlignmentRatio * 1.5, 1)
       );
     }
   }

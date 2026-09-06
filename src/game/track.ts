@@ -473,7 +473,7 @@ export const trackFindPointInTrack = (
     const toPos = vec2Sub(vec2NewCopy(pos), trackPoint.mPos);
     const signedOffset = vec2Dot(toPos, normal);
 
-    trackPoint.mInside = mathJs.abs(signedOffset) <= 0.5 * trackPoint.mWidth;
+    trackPoint.mInside = mathJs.abs(signedOffset) <= (0.5 * trackPoint.mWidth) + 3;
     trackPoint.mDistSqr = vec2Dot(toPos, toPos);
     
     return trackPoint;
@@ -613,7 +613,7 @@ function projectPointToSegment(pathIdx: number, segmentIdx: number, segment: Spl
     mPos: point,
     mTangent: tangent,
     mWidth: width,
-    mInside: Math.abs(signedOffset) <= 0.5 * width,
+    mInside: Math.abs(signedOffset) <= (0.5 * width) + 3,
     mDistSqr: distSq,
   };
 }

@@ -98,8 +98,12 @@ export const vec2Sub = (self: Vec2, v: Vec2) => (
 
 export const vec2Dot = (v1: Vec2, v2: Vec2) => v1.x * v2.x + v1.y * v2.y;
 
+export const vec2LengthSqr = (v: Vec2) => vec2Dot(v, v);
+
+export const vec2Length = (v: Vec2) => mathJs.sqrt(vec2Dot(v, v));
+
 export const vec2Normalize = (self: Vec2) => {
-  const len = mathJs.sqrt(vec2Dot(self, self));
+  const len = vec2Length(self);
 
   if (len > kMathEpsilon) {
     self.x = self.x / len;
@@ -114,6 +118,18 @@ export const vec2Normalize = (self: Vec2) => {
 
 export const vec2Angle = (v: Vec2) => mathJs.atan2(v.y, v.x);
 
+export const vec2Rotate = (self: Vec2, angle: number) => {
+  const cos = mathCos(angle);
+  const sin = mathSin(angle);
+  const x = self.x * cos - self.y * sin;
+  const y = self.x * sin + self.y * cos;
+  
+  self.x = x;
+  self.y = y;
+
+  return self;
+};
+
 export const vec2DistanceSqr = (v1: Vec2, v2: Vec2) => {
   const dx = v2.x - v1.x;
   const dy = v2.y - v1.y;
@@ -127,6 +143,22 @@ export const vec2Lerp = (self: Vec2, v: Vec2, ratio: number) => (
   self.y = mathLerp(self.y, v.y, ratio),
   self
 );
+
+export const vec2ClampLength = (self: Vec2, minLength: number, maxLength: number) => {
+  const len = vec2Length(self);
+
+  if (len === 0) {
+    return self;
+  }
+
+  if (len > maxLength) {
+    vec2MulScalar(self, maxLength / len);
+  } else if (len < minLength) {
+    vec2MulScalar(self, minLength / len);
+  }
+
+  return self;
+};
 
 export const splineCalculateCatmullRom = (points: SplinePoint[], alpha: number, outSegments: SplineSegment[]) => {
   const len = points.length - 3;
