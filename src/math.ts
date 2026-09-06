@@ -36,6 +36,11 @@ export const mathClamp = (a: number, min: number, max: number) => (a < min) ? mi
 
 export const mathLerp = (a: number, b: number, ratio: number) => a + (b - a) * ratio;
 
+export const mathLerpAngle = (a: number, b: number, ratio: number) => {
+  const delta = mathMod(b - a + kMathPi, kMathTau) - kMathPi;
+  return a + delta * ratio;
+};
+
 export const mathSmoothstep = (x: number) => {
   const t = mathJs.max(0, mathJs.min(1, x));
   return t * t * (3 - (2 * t));

@@ -77,11 +77,9 @@ export const controllerProcessAIForRacer = (self: AIController, racer: Racer, de
         if (gallopSafetyScore < kAIGallopKeepScore || !canKeepGalloping) {
           self.mIsGalloping = false;
           self.mIsWaitingForStamina = racer.mStamina < kAIGallopStartStamina;
-          console.log('Stopped galloping', gallopSafetyScore);
         }
       } else if (canStartGalloping && gallopSafetyScore >= kAIGallopEnterScore) {
         self.mIsGalloping = true;
-        console.log('Started galloping', gallopSafetyScore);
       }
 
       if (self.mIsGalloping) {

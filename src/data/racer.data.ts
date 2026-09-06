@@ -962,6 +962,20 @@ export const racerAnimations: AnimationFrames[] = [
     ],
   },
 ];
+export const racerMirrorNodes: { [nodeId: number]: number } = {
+  33: 36, // Upper front leg
+  34: 37, // Lower front leg
+  35: 38, // Front hoof
+  36: 33, // Upper front leg
+  37: 34, // Lower front leg
+  38: 35, // Front hoof
+  39: 42, // Upper back leg
+  40: 43, // Lower back leg
+  41: 44, // Back hoof
+  42: 39, // Upper back leg
+  43: 40, // Lower back leg
+  44: 41, // Back hoof
+};
 
 export const racerDataGetSkeleton = (
   colorBody: string, colorEyes: string, colorHorn: string, colorHair1: string, colorHair2: string

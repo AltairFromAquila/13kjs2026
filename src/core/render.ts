@@ -1,14 +1,12 @@
 import { easeInOutQuad, easeInOutSine, easeInQuad, easeInSine, easeOutQuad, easeOutSine } from "../easing";
 import { cloudsGetPixels } from "../game/clouds";
 import { racerRender } from "../game/racer";
-import { kMathEpsilon, kMathHalfPi, kMathPi, kMathTau, mathClamp, mathCos, mathJs, mathMod, mathSin, mathTan, vec2New } from "../math";
+import { kMathEpsilon, kMathHalfPi, kMathPi, kMathTau, mathClamp, mathCos, mathJs, mathMod, mathSin, mathTan, } from "../math";
+import type { Camera } from "../core/camera";
+import { kVerticalFov } from "../core/camera";
 import { canvas, createOffscreenCanvas, ctx } from "../sys/context";
 
 // TODO: Refactor
-const camPos = vec2New();
-let camHeight = 500;
-let camAngle = 0;
-let camPitch = 0;
 
 const easingFunctions = [
   (x: number) => x,
@@ -20,167 +18,17 @@ const easingFunctions = [
   easeInOutQuad
 ];
 
-const moveState = {
-  forward: false,
-  backward: false,
-  left: false,
-  right: false,
-  heightDown: false,
-  heightUp: false,
-  turnLeft: false,
-  turnRight: false,
-  pitchNegative: false,
-  pitchPositive: false,
-};
-const kCamSpeed = 200;
-const kHeightSpeed = 300;
-const kPitchSpeed = mathJs.PI * 0.25;
-const kTurnSpeed = mathJs.PI * 0.5;
-const kPitchMaxAbs = mathJs.PI * 0.5;
-const kCamHeightMin = 1;
-const kVerticalFov = mathJs.PI * 0.4;
 const kTau = mathJs.PI * 2;
 let prevInputUpdateTime = performance.now();
 let racerRotation = mathJs.PI * 0.25;
 let animationTime = 0;
-let logTime = 0;
+
 let cloudsWindOffsetX = 0;
 let cloudsWindOffsetY = 0;
 
 const kCloudsPlaneHeightOffset = 50;
 const kCloudsWindSpeedX = 6;
 const kCloudsWindSpeedY = -2;
-
-function handleMovementInput(deltaMs: number) {
-  const distance = kCamSpeed * (deltaMs / 1000);
-  const heightDelta = kHeightSpeed * (deltaMs / 1000);
-  const pitchDelta = kPitchSpeed * (deltaMs / 1000);
-  const turnDelta = kTurnSpeed * (deltaMs / 1000);
-  const yawSin = mathSin(camAngle);
-  const yawCos = mathCos(camAngle);
-
-  // Camera-local basis in world space.
-  const forwardX = yawSin;
-  const forwardY = -yawCos;
-  const rightX = yawCos;
-  const rightY = yawSin;
-
-  if (moveState.forward) {
-    camPos.x += forwardX * distance;
-    camPos.y += forwardY * distance;
-  }
-  if (moveState.backward) {
-    camPos.x -= forwardX * distance;
-    camPos.y -= forwardY * distance;
-  }
-  if (moveState.left) {
-    camPos.x -= rightX * distance;
-    camPos.y -= rightY * distance;
-  }
-  if (moveState.right) {
-    camPos.x += rightX * distance;
-    camPos.y += rightY * distance;
-  }
-  if (moveState.heightDown) camHeight -= heightDelta;
-  if (moveState.heightUp) camHeight += heightDelta;
-  if (moveState.turnLeft) camAngle -= turnDelta;
-  if (moveState.turnRight) camAngle += turnDelta;
-  if (moveState.pitchNegative) camPitch -= pitchDelta;
-  if (moveState.pitchPositive) camPitch += pitchDelta;
-
-  camHeight = mathJs.max(kCamHeightMin, camHeight);
-  camAngle = ((camAngle % kTau) + kTau) % kTau;
-  camPitch = mathJs.max(-kPitchMaxAbs, mathJs.min(kPitchMaxAbs, camPitch));
-
-  logTime += deltaMs * 0.001;
-  if (logTime > 2) {
-    console.log(camPos.x, camPos.y, camHeight, camAngle, camPitch);
-    logTime = 0;
-  }
-}
-
-window.addEventListener("keydown", (ev) => {
-  switch (ev.code) {
-    case "KeyW":
-      moveState.forward = true;
-      break;
-    case "KeyS":
-      moveState.backward = true;
-      break;
-    case "KeyQ":
-      moveState.left = true;
-      break;
-    case "KeyE":
-      moveState.right = true;
-      break;
-    case "KeyZ":
-      moveState.heightDown = true;
-      break;
-    case "KeyX":
-      moveState.heightUp = true;
-      break;
-    case "KeyA":
-      moveState.turnLeft = true;
-      break;
-    case "KeyD":
-      moveState.turnRight = true;
-      break;
-    case "KeyR":
-      moveState.pitchNegative = true;
-      break;
-    case "KeyF":
-      moveState.pitchPositive = true;
-      break;
-  }
-});
-
-window.addEventListener("keyup", (ev) => {
-  switch (ev.code) {
-    case "KeyW":
-      moveState.forward = false;
-      break;
-    case "KeyS":
-      moveState.backward = false;
-      break;
-    case "KeyQ":
-      moveState.left = false;
-      break;
-    case "KeyE":
-      moveState.right = false;
-      break;
-    case "KeyZ":
-      moveState.heightDown = false;
-      break;
-    case "KeyX":
-      moveState.heightUp = false;
-      break;
-    case "KeyA":
-      moveState.turnLeft = false;
-      break;
-    case "KeyD":
-      moveState.turnRight = false;
-      break;
-    case "KeyR":
-      moveState.pitchNegative = false;
-      break;
-    case "KeyF":
-      moveState.pitchPositive = false;
-      break;
-  }
-});
-
-window.addEventListener("blur", () => {
-  moveState.forward = false;
-  moveState.backward = false;
-  moveState.left = false;
-  moveState.right = false;
-  moveState.heightDown = false;
-  moveState.heightUp = false;
-  moveState.turnLeft = false;
-  moveState.turnRight = false;
-  moveState.pitchNegative = false;
-  moveState.pitchPositive = false;
-});
 
 const {
   offscreenCanvas: projectedPlaneCanvas,
@@ -189,10 +37,9 @@ const {
 // const projectedPlaneCanvas: OffscreenCanvas = new OffscreenCanvas(canvas.width, canvas.height);
 // const projectedPlaneCtx: OffscreenCanvasRenderingContext2D = projectedPlaneCanvas.getContext('2d')!;
 
-export function render(a: any, b: any[]) {
+export function render(camera: Camera, a: any, b: any[]) {
   const now = performance.now();
   const deltaMs = now - prevInputUpdateTime;
-  handleMovementInput(deltaMs);
   // racerRotation += (now - prevInputUpdateTime) * 0.001;
   animationTime = (animationTime + deltaMs * 0.0015) % 1.0;
   const deltaSec = deltaMs * 0.001;
@@ -200,7 +47,7 @@ export function render(a: any, b: any[]) {
   cloudsWindOffsetY += kCloudsWindSpeedY * deltaSec;
   prevInputUpdateTime = now;
 
-  renderProjectedPlane(a);
+  renderProjectedPlane(camera, a);
 
   const rotationOff = (mathJs.PI * 0.5) - racerRotation;
   if (rotationOff < 0) {
@@ -212,7 +59,7 @@ export function render(a: any, b: any[]) {
   // renderRacer();
 
   for (const r of b) {
-    renderRacer2(r);
+    renderRacer2(camera, r);
   }
   // renderRacer2(b);
 }
@@ -304,7 +151,7 @@ function overAbgr(top: number, bottom: number): number {
     | ((outR | 0) & 0xff);
 }
 
-function renderProjectedPlane(a: any) {
+function renderProjectedPlane(camera: Camera, a: any) {
   if (!trackPixels) {
     const trackCanvas = a.textureCanvas as OffscreenCanvas;
     const trackImage = a.textureCtx.getImageData(0, 0, trackCanvas.width, trackCanvas.height);
@@ -318,10 +165,10 @@ function renderProjectedPlane(a: any) {
   const width = canvas.width;
   const height = canvas.height;
 
-  const camSin = mathSin(camPitch);
-  const camCos = mathCos(camPitch);
-  const yawSin = mathSin(camAngle);
-  const yawCos = mathCos(camAngle);
+  const camSin = mathSin(camera.mPitch);
+  const camCos = mathCos(camera.mPitch);
+  const yawSin = mathSin(camera.mAngle);
+  const yawCos = mathCos(camera.mAngle);
   const rowStride = kMask + 1;
   const cloudsRowStride = kCloudsMask + 1;
 
@@ -338,8 +185,8 @@ function renderProjectedPlane(a: any) {
     }
 
     const invZ = 1 / -rayZ;
-    const t = camHeight * invZ;
-    const cloudsT = (camHeight + kCloudsPlaneHeightOffset) * invZ;
+    const t = camera.mHeight * invZ;
+    const cloudsT = (camera.mHeight + kCloudsPlaneHeightOffset) * invZ;
     const localY = t * rayY;
     const cloudsLocalY = cloudsT * rayY;
     const linearFogValue = mathClamp((invZ * kFogFactor) - 1, 0, 1);
@@ -355,10 +202,10 @@ function renderProjectedPlane(a: any) {
       const cloudsWorldX = (yawCos * cloudsLocalX) - (yawSin * cloudsLocalY) + cloudsWindOffsetX;
       const cloudsWorldY = (yawSin * cloudsLocalX) + (yawCos * cloudsLocalY) + cloudsWindOffsetY;
 
-      const texX = (camPos.x + worldX) | 0;
-      const texY = (camPos.y + worldY) | 0;
-      const cloudsTexX = (camPos.x + cloudsWorldX) | 0;
-      const cloudsTexY = (camPos.y + cloudsWorldY) | 0;
+      const texX = (camera.mPos.x + worldX) | 0;
+      const texY = (camera.mPos.y + worldY) | 0;
+      const cloudsTexX = (camera.mPos.x + cloudsWorldX) | 0;
+      const cloudsTexY = (camera.mPos.y + cloudsWorldY) | 0;
       const rowOffset = (texY & kMask) * rowStride;
       const textureIdx = rowOffset + (texX & kMask);
       const cloudsRowOffset = (cloudsTexY & kCloudsMask) * cloudsRowStride;
@@ -1584,11 +1431,11 @@ function renderRacer() {
   ctx.restore();
 }
 
-function renderRacer2(racer: any) {
-  const dx = racer.mPos.x - camPos.x;
-  const dy = racer.mPos.y - camPos.y;
-  const yawSin = mathSin(camAngle);
-  const yawCos = mathCos(camAngle);
+function renderRacer2(camera: Camera, racer: any) {
+  const dx = racer.mPos.x - camera.mPos.x;
+  const dy = racer.mPos.y - camera.mPos.y;
+  const yawSin = mathSin(camera.mAngle);
+  const yawCos = mathCos(camera.mAngle);
   const tanHalfVFov = mathTan(kVerticalFov * 0.5);
   const tanHalfHFov = tanHalfVFov * (canvas.width / canvas.height);
   const halfWidth = canvas.width * 0.5;
@@ -1596,10 +1443,10 @@ function renderRacer2(racer: any) {
 
   const xCam = (yawCos * dx) + (yawSin * dy);
   const zBase = (-yawSin * dx) + (yawCos * dy);
-  const pitchSin = mathSin(camPitch);
-  const pitchCos = mathCos(camPitch);
-  const yCam = (-camHeight * pitchCos) - (zBase * pitchSin);
-  const zCam = (-camHeight * pitchSin) + (zBase * pitchCos);
+  const pitchSin = mathSin(camera.mPitch);
+  const pitchCos = mathCos(camera.mPitch);
+  const yCam = (-camera.mHeight * pitchCos) - (zBase * pitchSin);
+  const zCam = (-camera.mHeight * pitchSin) + (zBase * pitchCos);
   const zDepth = -zCam;
   const safeZ = (zDepth > 1e-6) ? zDepth : 1e-6;
   const ndcX = xCam / (safeZ * tanHalfHFov);
@@ -1624,7 +1471,7 @@ function renderRacer2(racer: any) {
   }
 
   const groundDistance = mathJs.hypot(dx, dy);
-  const groundInvZ = groundDistance / camHeight;
+  const groundInvZ = groundDistance / camera.mHeight;
   const linearFogValue = mathClamp((groundInvZ * kFogFactor) - 1, 0, 1);
   const fogAlpha = 1 - easeOutQuad(linearFogValue);
 

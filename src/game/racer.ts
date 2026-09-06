@@ -1,4 +1,5 @@
-import { racerAnimations, type SkeletonNode, type SkeletonNodeShapes } from "../data/racer.data";
+import { racerAnimations, racerMirrorNodes, type SkeletonNode, type SkeletonNodeShapes } from "../data/racer.data";
+import { easeOutCubic } from "../easing";
 import { Game } from "../game";
 import { kMathEpsilon, kMathHalfPi, kMathPi, kMathTau, mathClamp, mathCos, mathJs, mathLerp, mathMod, mathPingPong, mathSin, vec2Add, vec2ClampLength, vec2Copy, vec2CopyFromTuple, vec2Dot, vec2Length, vec2LengthSqr, vec2MulScalar, vec2New, vec2NewCopy, vec2Normalize, type Vec2 } from "../math";
 import { ctxBeginPath, ctxClosePathAndFill, ctxLineTo, ctxMoveTo, ctxSetFillStyle } from "../sys/context";
@@ -11,7 +12,7 @@ const kRacerColDiameter = 6 as const;
 
 const kRacerMaxJogSpeed = 64 as const;
 const kRacerMaxSpeed = 120 as const;
-const kRacerMaxSpeedWhileGalloping = 160 as const;
+const kRacerMaxSpeedWhileGalloping = 180 as const;
 
 const kRacerGallopingMaxSpeedIncrement = 10 as const;
 const kRacerGallopingMaxSpeedDecrease = -0.5 as const;
@@ -178,7 +179,7 @@ export const racerFixedTick = (self: Racer, delta: number) => {
     const velAlignment = vec2Dot(self.mController.mDesiredDirection, velDir);
     const velAlignmentRatio = (velAlignment - 1) * -0.5; // remap to [0, 1] range, where 0 is same direction, 1 is opposite direction
 
-    acceleration = mathLerp(4, 8, velAlignmentRatio);
+    acceleration = mathLerp(4, 16, easeOutCubic(velAlignmentRatio));
   }
 
   if (self.mController.mIsGalloping) {
@@ -208,7 +209,7 @@ export const racerFixedTick = (self: Racer, delta: number) => {
       }
     } else {
       self.mMaxSpeed = kRacerMaxJogSpeed;
-      self.mJogTime -= delta / 3;
+      self.mJogTime -= delta / 2;
       if (self.mJogTime < 0) {
         self.mJogTime = 0;
       }
@@ -285,11 +286,14 @@ export const racerRender = (
   x: number, y: number, invZ: number,
   angle: number, scale: number, alpha: number
 ) => {
+  const dir = (mathJs.abs(angle) < kMathHalfPi) ? 1 : -1;
+  
   const getAnimatedAngle = (partId: number) =>{
     const anim = racerAnimations[self.mAnimIdx];
     if (!anim) return 0;
   
-    const partAnim = anim[partId];
+    const partIdAnim = (dir < 0) ? racerMirrorNodes[partId] ?? partId : partId;
+    const partAnim = anim[partIdAnim];
     const partAnimLen = partAnim?.length ?? 0;
 
     if (!partAnim || partAnimLen === 0) return 0;
@@ -346,7 +350,6 @@ export const racerRender = (
     ] as [number, number];
   };
 
-  const dir = (mathJs.abs(angle) < kMathHalfPi) ? 1 : -1;
   const toScreen = (point: Vec2): [number, number] => {
     return [x + (point.x * scale * dir), y + (point.y * scale)];
   }
