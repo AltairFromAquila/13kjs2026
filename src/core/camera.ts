@@ -1,8 +1,7 @@
-import { kMathPi, type Vec2 } from "../math";
+import { kMathPi } from "../math";
+import type { Renderable } from "./render";
 
-export interface Camera {
-  mPos: Vec2;
-  mAngle: number;
+export interface Camera extends Renderable {
   mPitch: number;
   mHeight: number;
   mVerticalFov: number;

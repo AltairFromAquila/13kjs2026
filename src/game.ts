@@ -1,12 +1,12 @@
-import { render } from "./core/render";
+import { render, type RenderableCommand } from "./core/render";
 import { racerDataGetSkeleton, racerDataGetSkeletonShapes } from "./data/racer.data";
 import { tracks } from "./data/track.data";
 import { cloudsGenerate } from "./game/clouds";
-import { racerFixedTick, racerNew, racerSetAngleFromVector, racerSetupTrackPoints, racerTick, type Racer } from "./game/racer";
+import { racerFixedTick, racerNew, racerRender, racerSetAngleFromVector, racerSetupTrackPoints, racerTick, type Racer } from "./game/racer";
 import { Track, trackDrawTexture, trackGetStartPositions, trackLoadData } from "./game/track";
-import { vec2Copy } from "./math";
+import { mathTan, vec2Copy } from "./math";
 import { cameraFreeCamNew, cameraSetupFreeCamEvents, cameraHandleFreeCamInput, type FreeCamera, cameraGameCamNew, cameraGameCamTick, type GameCamera } from "./game/camera";
-import type { Camera } from "./core/camera";
+import { kVerticalFov, type Camera } from "./core/camera";
 import { renderGameUI } from "./game/game-ui";
 
 const kTargetTickTime = 1/120;
@@ -20,6 +20,8 @@ export interface Game {
   mRacers: Racer[];
 
   mCamera: Camera;
+
+  mRenderRacerCmd: RenderableCommand<Racer>;
 }
 
 export const Game: Game = {
@@ -62,6 +64,11 @@ export const Game: Game = {
   ],
   mCamera: cameraGameCamNew(),
   // mCamera: cameraFreeCamNew(),
+  mRenderRacerCmd: {
+    mRenderables: [],
+    mScale: 440 / ((900 * 0.5) / mathTan(kVerticalFov * 0.5)),
+    mCommand: racerRender,
+  }
 }
 
 export const gameInit = () => {
@@ -75,11 +82,15 @@ export const gameInit = () => {
     vec2Copy(Game.mRacers[i].mPos, startPositions[0].mPos);
     racerSetAngleFromVector(Game.mRacers[i], startPositions[0].mTangent);
     racerSetupTrackPoints(Game.mRacers[i], startPositions[0]);
+
+    Game.mRenderRacerCmd.mRenderables.push(Game.mRacers[i]);
   }
   for (let i = Game.mRacers.length * 0.5; i < Game.mRacers.length; ++i) {
     vec2Copy(Game.mRacers[i].mPos, startPositions[1].mPos);
     racerSetAngleFromVector(Game.mRacers[i], startPositions[1].mTangent);
     racerSetupTrackPoints(Game.mRacers[i], startPositions[1]);
+    
+    Game.mRenderRacerCmd.mRenderables.push(Game.mRacers[i]);
   }
 
   (Game.mCamera as GameCamera).mTarget = Game.mRacers[0];
@@ -96,7 +107,7 @@ function processDefault(self: Game, delta: number) {
   }
   cameraGameCamTick(self.mCamera as GameCamera, delta);
   // cameraHandleFreeCamInput(self.mCamera as FreeCamera, delta);
-  render(self.mCamera, self.mTrack, self.mRacers);
+  render(self.mCamera, self.mTrack, self.mRenderRacerCmd);
   renderGameUI(delta);
   // ctx.drawImage(self.track.textureCanvas, 0, -650, 2800, 2800);
   // ctx.drawImage(self.track.textureCanvas, 0, 0, 1400, 1400);

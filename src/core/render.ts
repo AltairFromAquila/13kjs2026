@@ -1,12 +1,31 @@
 import { easeInOutQuad, easeInOutSine, easeInQuad, easeInSine, easeOutQuad, easeOutSine } from "../easing";
 import { cloudsGetPixels } from "../game/clouds";
 import { racerRender } from "../game/racer";
-import { kMathEpsilon, kMathHalfPi, kMathPi, kMathTau, mathClamp, mathCos, mathJs, mathMod, mathSin, mathTan, } from "../math";
+import { kMathEpsilon, kMathHalfPi, kMathPi, kMathTau, mathClamp, mathCos, mathJs, mathMod, mathSin, mathTan, type Vec2, } from "../math";
 import type { Camera } from "../core/camera";
 import { kVerticalFov } from "../core/camera";
 import { canvas, createOffscreenCanvas, ctx } from "../sys/context";
 
-// TODO: Refactor
+export interface Renderable {
+  mPos: Vec2;
+  mAngle: number;
+}
+
+export interface RenderableCommand<R extends Renderable> {
+  mRenderables: R[];
+  mScale: number;
+  mCommand: (self: R, ctx: CanvasRenderingContext2D, x: number, y: number, invZ: number, angle: number, scale: number, alpha: number) => void;
+}
+
+interface SortedRenderable<R extends Renderable = Renderable> {
+  mRenderable: R;
+  mInvZ: number;
+  mX: number;
+  mY: number;
+  mAngle: number;
+  mScale: number;
+  mAlpha: number;
+}
 
 const easingFunctions = [
   (x: number) => x,
@@ -17,6 +36,8 @@ const easingFunctions = [
   easeOutQuad,
   easeInOutQuad
 ];
+
+const workSortedRenderables: SortedRenderable[] = [];
 
 const kTau = mathJs.PI * 2;
 let prevInputUpdateTime = performance.now();
@@ -37,7 +58,7 @@ const {
 // const projectedPlaneCanvas: OffscreenCanvas = new OffscreenCanvas(canvas.width, canvas.height);
 // const projectedPlaneCtx: OffscreenCanvasRenderingContext2D = projectedPlaneCanvas.getContext('2d')!;
 
-export function render(camera: Camera, a: any, b: any[]) {
+export function render<R extends Renderable>(camera: Camera, a: any, renderableCmd: RenderableCommand<R>) {
   const now = performance.now();
   const deltaMs = now - prevInputUpdateTime;
   // racerRotation += (now - prevInputUpdateTime) * 0.001;
@@ -58,9 +79,7 @@ export function render(camera: Camera, a: any, b: any[]) {
   ctx.drawImage(projectedPlaneCanvas, 0, 0);
   // renderRacer();
 
-  for (const r of b) {
-    renderRacer2(camera, r);
-  }
+  renderRenderables(camera, renderableCmd);
   // renderRacer2(b);
 }
 
@@ -1431,53 +1450,107 @@ function renderRacer() {
   ctx.restore();
 }
 
-function renderRacer2(camera: Camera, racer: any) {
-  const dx = racer.mPos.x - camera.mPos.x;
-  const dy = racer.mPos.y - camera.mPos.y;
-  const yawSin = mathSin(camera.mAngle);
-  const yawCos = mathCos(camera.mAngle);
-  const tanHalfVFov = mathTan(kVerticalFov * 0.5);
-  const tanHalfHFov = tanHalfVFov * (canvas.width / canvas.height);
-  const halfWidth = canvas.width * 0.5;
-  const halfHeight = canvas.height * 0.5;
+function renderRenderables<R extends Renderable>(camera: Camera, renderableCmd: RenderableCommand<R>) {
+  const sortedRenderables = workSortedRenderables as SortedRenderable<R>[];
+  let renderableCount = 0;
 
-  const xCam = (yawCos * dx) + (yawSin * dy);
-  const zBase = (-yawSin * dx) + (yawCos * dy);
-  const pitchSin = mathSin(camera.mPitch);
-  const pitchCos = mathCos(camera.mPitch);
-  const yCam = (-camera.mHeight * pitchCos) - (zBase * pitchSin);
-  const zCam = (-camera.mHeight * pitchSin) + (zBase * pitchCos);
-  const zDepth = -zCam;
-  const safeZ = (zDepth > 1e-6) ? zDepth : 1e-6;
-  const ndcX = xCam / (safeZ * tanHalfHFov);
-  const ndcY = yCam / (safeZ * tanHalfVFov);
-  const x = (ndcX * halfWidth) + halfWidth - 0.5;
-  const y = halfHeight - (ndcY * halfHeight) - 0.5;
+  for (const renderable of renderableCmd.mRenderables) {
+    const dx = renderable.mPos.x - camera.mPos.x;
+    const dy = renderable.mPos.y - camera.mPos.y;
+    const yawSin = mathSin(camera.mAngle);
+    const yawCos = mathCos(camera.mAngle);
+    const tanHalfVFov = mathTan(kVerticalFov * 0.5);
+    const tanHalfHFov = tanHalfVFov * (canvas.width / canvas.height);
+    const halfWidth = canvas.width * 0.5;
+    const halfHeight = canvas.height * 0.5;
 
-  const invZ = 1 / safeZ;
-  const camFromRacerAngle = mathJs.atan2(-dy, -dx);
-  const relAngle = racer.mAngle - camFromRacerAngle - kMathHalfPi;
-  // const angle = mathJs.atan2(mathSin(relAngle), mathCos(relAngle));
-  const angle = mathMod((relAngle + kMathPi), kMathTau) - kMathPi;
-  const focalY = halfHeight / tanHalfVFov;
-  const scale = kRacerScaleFromFocal * focalY * invZ;
+    const xCam = (yawCos * dx) + (yawSin * dy);
+    const zBase = (-yawSin * dx) + (yawCos * dy);
+    const pitchSin = mathSin(camera.mPitch);
+    const pitchCos = mathCos(camera.mPitch);
+    const yCam = (-camera.mHeight * pitchCos) - (zBase * pitchSin);
+    const zCam = (-camera.mHeight * pitchSin) + (zBase * pitchCos);
+    const zDepth = -zCam;
+    const safeZ = (zDepth > 1e-6) ? zDepth : 1e-6;
+    const ndcX = xCam / (safeZ * tanHalfHFov);
+    const ndcY = yCam / (safeZ * tanHalfVFov);
+    const x = (ndcX * halfWidth) + halfWidth - 0.5;
+    const y = halfHeight - (ndcY * halfHeight) - 0.5;
 
-  const offscreenOffset = 12 * scale;
-  if (
-    x < -offscreenOffset || x > canvas.width + offscreenOffset ||
-    y < 0 || y > canvas.height + offscreenOffset
-  ) {
-      return;
+    const invZ = 1 / safeZ;
+    const camFromRacerAngle = mathJs.atan2(-dy, -dx);
+    const relAngle = renderable.mAngle - camFromRacerAngle - kMathHalfPi;
+    // const angle = mathJs.atan2(mathSin(relAngle), mathCos(relAngle));
+    const angle = mathMod((relAngle + kMathPi), kMathTau) - kMathPi;
+    const focalY = halfHeight / tanHalfVFov;
+    const scale = renderableCmd.mScale * focalY * invZ;
+
+    const offscreenOffset = 12 * scale;
+    if (
+      x < -offscreenOffset || x > canvas.width + offscreenOffset ||
+      y < 0 || y > canvas.height + offscreenOffset
+    ) {
+      continue;
+    }
+
+    const groundDistance = mathJs.hypot(dx, dy);
+    const groundInvZ = groundDistance / camera.mHeight;
+    const linearFogValue = mathClamp((groundInvZ * kFogFactor) - 1, 0, 1);
+    const fogAlpha = 1 - easeOutQuad(linearFogValue);
+
+    if (zBase > -5 || fogAlpha < kMathEpsilon) {
+      continue;
+    }
+
+    if (renderableCount < sortedRenderables.length) {
+      sortedRenderables[renderableCount] = {
+        mRenderable: renderable,
+        mInvZ: invZ,
+        mX: x,
+        mY: y,
+        mAngle: angle,
+        mScale: scale,
+        mAlpha: fogAlpha
+      };
+    } else {
+      sortedRenderables.push({
+        mRenderable: renderable,
+        mInvZ: invZ,
+        mX: x,
+        mY: y,
+        mAngle: angle,
+        mScale: scale,
+        mAlpha: fogAlpha
+      });
+    }
+
+    renderableCount++;
   }
 
-  const groundDistance = mathJs.hypot(dx, dy);
-  const groundInvZ = groundDistance / camera.mHeight;
-  const linearFogValue = mathClamp((groundInvZ * kFogFactor) - 1, 0, 1);
-  const fogAlpha = 1 - easeOutQuad(linearFogValue);
+  // Insertion sort on active slice only, so we do not touch stale buffer entries.
+  for (let i = 1; i < renderableCount; ++i) {
+    const item = sortedRenderables[i];
+    let j = i - 1;
 
-  if (zBase > -5 || fogAlpha < kMathEpsilon) {
-    return;
+    while (j >= 0 && sortedRenderables[j].mInvZ > item.mInvZ) {
+      sortedRenderables[j + 1] = sortedRenderables[j];
+      j--;
+    }
+
+    sortedRenderables[j + 1] = item;
   }
-  
-  racerRender(racer, ctx, x, y, invZ, angle, scale, fogAlpha);
+
+  for (let i = 0; i < renderableCount; ++i) {
+    const item = sortedRenderables[i];
+    renderableCmd.mCommand(
+      item.mRenderable,
+      ctx,
+      item.mX,
+      item.mY,
+      item.mInvZ,
+      item.mAngle,
+      item.mScale,
+      item.mAlpha,
+    );
+  }
 }

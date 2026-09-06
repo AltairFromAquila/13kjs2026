@@ -1,3 +1,4 @@
+import type { Renderable } from "../core/render";
 import { racerAnimations, racerMirrorNodes, type SkeletonNode, type SkeletonNodeShapes } from "../data/racer.data";
 import { easeOutCubic } from "../easing";
 import { Game } from "../game";
@@ -57,7 +58,7 @@ interface TransformedRacerNodeShape {
 
 type TransformedRacerNodeEntry = TransformedRacerNode | TransformedRacerNodeShape;
 
-export interface Racer {
+export interface Racer extends Renderable {
   mSkeleton: SkeletonNode[];
   mSkeletonShapes: SkeletonNodeShapes;
 
@@ -70,10 +71,7 @@ export interface Racer {
   mTrackPoints: { [pathIdx: number]: TrackPointProjection };
   mLastValidPathIdx: number;
 
-  mPos: Vec2;
   mVel: Vec2;
-  mAngle: number;
-
   mMaxSpeed: number;
   mJogTime: number;
 
@@ -287,7 +285,7 @@ export const racerRender = (
   angle: number, scale: number, alpha: number
 ) => {
   const dir = (mathJs.abs(angle) < kMathHalfPi) ? 1 : -1;
-  
+
   const getAnimatedAngle = (partId: number) =>{
     const anim = racerAnimations[self.mAnimIdx];
     if (!anim) return 0;
