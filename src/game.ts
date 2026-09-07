@@ -4,7 +4,7 @@ import { tracks } from "./data/track.data";
 import { cloudsGenerate } from "./game/clouds";
 import { racerFixedTick, racerNew, racerRender, racerSetAngleFromVector, racerSetupTrackPoints, racerTick, type Racer } from "./game/racer";
 import { Track, trackDrawTexture, trackGetStartPositions, trackLoadData } from "./game/track";
-import { mathTan, vec2Copy } from "./math";
+import { mathJs, mathTan, vec2Copy } from "./math";
 import { cameraFreeCamNew, cameraSetupFreeCamEvents, cameraHandleFreeCamInput, type FreeCamera, cameraGameCamNew, cameraGameCamTick, type GameCamera } from "./game/camera";
 import { kVerticalFov, type Camera } from "./core/camera";
 import { renderGameUI } from "./game/game-ui";
@@ -72,7 +72,7 @@ export const Game: Game = {
 }
 
 export const gameInit = () => {
-  trackLoadData(Game.mTrack, tracks[2]);
+  trackLoadData(Game.mTrack, tracks[0]);
   trackDrawTexture(Game.mTrack);
   cloudsGenerate();
   
@@ -89,7 +89,7 @@ export const gameInit = () => {
     vec2Copy(Game.mRacers[i].mPos, startPositions[1].mPos);
     racerSetAngleFromVector(Game.mRacers[i], startPositions[1].mTangent);
     racerSetupTrackPoints(Game.mRacers[i], startPositions[1]);
-    
+
     Game.mRenderRacerCmd.mRenderables.push(Game.mRacers[i]);
   }
 
@@ -114,7 +114,7 @@ function processDefault(self: Game, delta: number) {
 }
 
 function processWithFixed(self: Game, delta: number) {
-  self.mAccTime += delta;
+  self.mAccTime = mathJs.min(self.mAccTime + delta, 5);
   if (self.mAccTime > kTargetTickTime) {
     for (; self.mAccTime > 0; self.mAccTime -= kTargetTickTime) {
       for (const racer of self.mRacers) {

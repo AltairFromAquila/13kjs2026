@@ -2,7 +2,7 @@ import type { Renderable } from "../core/render";
 import { racerAnimations, racerMirrorNodes, type SkeletonNode, type SkeletonNodeShapes } from "../data/racer.data";
 import { easeOutCubic } from "../easing";
 import { Game } from "../game";
-import { kMathEpsilon, kMathHalfPi, kMathPi, kMathTau, mathClamp, mathCos, mathJs, mathLerp, mathMod, mathPingPong, mathSin, vec2Add, vec2ClampLength, vec2Copy, vec2CopyFromTuple, vec2Dot, vec2Length, vec2LengthSqr, vec2MulScalar, vec2New, vec2NewCopy, vec2Normalize, type Vec2 } from "../math";
+import { kMathEpsilon, kMathHalfPi, kMathPi, kMathTau, mathClamp, mathCos, mathJs, mathLerp, mathMod, mathPingPong, mathSin, splineCalculateSegmentPoint, splineCalculateSegmentTangent, vec2Add, vec2ClampLength, vec2Copy, vec2CopyFromTuple, vec2Dot, vec2Length, vec2LengthSqr, vec2MulScalar, vec2New, vec2NewCopy, vec2Normalize, type Vec2 } from "../math";
 import { ctxBeginPath, ctxClosePathAndFill, ctxLineTo, ctxMoveTo, ctxSetFillStyle } from "../sys/context";
 import { newCircleCollider, type CircleCollider } from "./collision";
 import { controllerProcessAIForRacer, type AIController } from "./controllers";
@@ -79,6 +79,13 @@ export interface Racer extends Renderable {
   mAnimTime: number;
   mAnimSpeed: number;
 
+  mTotalTime: number;
+  mLapTime: number;
+  mLastLapTime: number;
+  mBestLapTime: number;
+  mLap: number;
+  mLapTracker: number;
+
   mStamina: number;
 
   mIsPlayer: boolean;
@@ -107,6 +114,13 @@ export const racerNew = (skeleton: SkeletonNode[], skeletonShapes: SkeletonNodeS
   mAnimSpeed: 1,
 
   mController: { mDesiredDirection: vec2New(), mPreviousSegmentT: 0, mReactionTimer: 0, mIsBlockingPlayer: false, mBlockPlayerTimer: 0, mIsWaitingForStamina: false, mIsGalloping: false, mPreviousSegmentIdx: -1, mGallopingReactionTimer: 0, mWasStuck: false, mGallopTapPressed: false },
+
+  mTotalTime: 0,
+  mLapTime: 0,
+  mLastLapTime: 0,
+  mBestLapTime: 0,
+  mLap: 0,
+  mLapTracker: 0,
 
   mStamina: 1,
   mIsPlayer: false,
@@ -157,6 +171,11 @@ export const racerFixedTick = (self: Racer, delta: number) => {
   if (!self.mIsPlayer) {
     controllerProcessAIForRacer(self.mController, self, delta);
   }
+
+  const prevPos = vec2NewCopy(self.mPos);
+
+  self.mTotalTime += delta;
+  self.mLapTime += delta;
 
   if (self.mController.mIsGalloping) {
     self.mStamina -= delta * 0.1; // Decrease stamina continuously while galloping
@@ -235,8 +254,46 @@ export const racerFixedTick = (self: Racer, delta: number) => {
     racerSetAngleFromVector(self, self.mVel);
   }
 
+  const prevMainSegmentIdx = self.mTrackPoints[-1]?.mSegmentIdx ?? 0;
+
   vec2Add(self.mPos, vec2MulScalar(vec2NewCopy(self.mVel), delta));
   trackFindPointInTrack(Game.mTrack, self.mPos, -1, 0, self.mTrackPoints);
+
+  if (prevMainSegmentIdx === 0 && self.mTrackPoints[-1]?.mSegmentIdx === Game.mTrack.segments.length - 1) {
+    self.mLapTracker -= 1;
+  } else if (prevMainSegmentIdx === Game.mTrack.segments.length - 1 && self.mTrackPoints[-1]?.mSegmentIdx === 0) {
+    if (self.mLapTracker === self.mLap) {
+      if (self.mLap > 0) {
+        const startPos = splineCalculateSegmentPoint(Game.mTrack.segments[0], 0, vec2New());
+        const startTangent = splineCalculateSegmentTangent(Game.mTrack.segments[0], 0, vec2New());
+
+        // Find u in: SP + t*n = PP + u*(CP - PP), where n is the start-line normal.
+        const startNormal = vec2New(-startTangent.y, startTangent.x);
+        const moveVecX = self.mPos.x - prevPos.x;
+        const moveVecY = self.mPos.y - prevPos.y;
+        const spToPrevX = startPos.x - prevPos.x;
+        const spToPrevY = startPos.y - prevPos.y;
+
+        const den = (moveVecX * startNormal.y) - (moveVecY * startNormal.x);
+        let crossingRatio = 1;
+        if (mathJs.abs(den) > kMathEpsilon) {
+          const num = (spToPrevX * startNormal.y) - (spToPrevY * startNormal.x);
+          crossingRatio = mathClamp(num / den, 0, 1);
+        }
+
+        const nextLapCarry = delta * (1 - crossingRatio);
+        const finishedLapTime = self.mLapTime - nextLapCarry;
+        if (finishedLapTime > 0 && (self.mBestLapTime <= 0 || finishedLapTime < self.mBestLapTime)) {
+          self.mBestLapTime = finishedLapTime;
+        }
+
+        self.mLastLapTime = finishedLapTime;
+        self.mLapTime = nextLapCarry;
+      }
+      self.mLap += 1;
+    }
+    self.mLapTracker += 1;
+  }
 
   let isInsideAnyPath = false;
   let bestDistance = Infinity;

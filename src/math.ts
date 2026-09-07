@@ -248,7 +248,7 @@ export const splineCalculateCatmullRom = (points: SplinePoint[], alpha: number, 
 export const splineCalculateSegmentPoint = (
   segment: SplineSegment, t: number, outVec: Vec2
 ) => (t === 0)
-  ? segment.d
+  ? vec2Copy(outVec, segment.d)
   : vec2Add(
       vec2MulScalar(
         vec2Add(
@@ -270,7 +270,7 @@ export const splineCalculateSegmentTangent = (
   segment: SplineSegment, t: number, outVec: Vec2
 ) => vec2Normalize(
   (t === 0)
-    ? segment.c
+    ? vec2Copy(outVec, segment.c)
     : vec2Add(
         vec2MulScalar(
           vec2Add(
