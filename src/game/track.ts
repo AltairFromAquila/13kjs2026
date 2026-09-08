@@ -1,5 +1,5 @@
 import type { TrackRawData } from "../data/track.data";
-import { splineCalculateCatmullRom, splineCalculateSegmentPoint, splineCalculateSegmentTangent, mathLerp, mathJs, vec2Add, vec2Dot, vec2MulScalar, vec2New, vec2NewCopy, vec2Normalize, vec2Sub, type SplinePoint, type SplineSegment, type Vec2, mathMod, vec2Copy } from "../math";
+import { splineCalculateCatmullRom, splineCalculateSegmentPoint, splineCalculateSegmentTangent, mathLerp, mathJs, vec2Add, vec2Dot, vec2MulScalar, vec2New, vec2NewCopy, vec2Normalize, vec2Sub, type SplinePoint, type SplineSegment, type Vec2, mathMod, vec2Copy, vec2LengthSqr } from "../math";
 
 interface TrackData {
   mainPath: SplinePoint[];
@@ -17,6 +17,8 @@ interface SecondaryPathData {
 interface SecondaryPath {
   segments: SplineSegment[];
   depthChanges: { [point: number]: number; };
+  branchOffPath: { path: number; point: number; };
+  branchInPath: { path: number; point: number; };
 }
 
 export interface TrackPointProjection {
@@ -47,6 +49,17 @@ const kStartPosDistanceFromStartLine = 12 as const;
 const kStartPosDistance = 24 as const;
 
 const workTrackPoints: { [k: number]: TrackPointProjection } = {};
+
+export const trackGetTrackWidthAt = (self: Track, pathIdx: number, segmentIdx: number, t: number) => {
+  const segments = (pathIdx === -1)
+    ? self.segments
+    : self.secondaryPaths[pathIdx]?.segments;
+  const segmentLen = segments?.length ?? 0;
+  
+  if (segmentLen === 0) return 0;
+  const segment = segments[trackWrapSegmentIndex(segmentIdx, segments.length)];
+  return mathLerp(segment.w0, segment.w1, t);
+};
 
 export function trackLoadData(self: Track, data: TrackRawData) {
   const mainPath: SplinePoint[] = [];
@@ -131,7 +144,9 @@ export function trackCalculateSpline(self: Track, trackData: TrackData) {
 
     secondaryPaths.push({
       segments,
-      depthChanges: path.depthChanges
+      depthChanges: path.depthChanges,
+      branchOffPath: path.branchOffPath,
+      branchInPath: path.branchInPath
     });
   }
 }
@@ -296,7 +311,7 @@ export function trackDrawTexture(self: Track) {
   }
 }
 
-export const trackGetStartPositions = (self: Track): TrackPointProjection[] => {
+export const trackGetStartPositions = (self: Track, rows: number): TrackPointProjection[] => {
   const positions: TrackPointProjection[] = [];
   const start = self.segments[0];
   if (!start) return positions;
@@ -378,13 +393,14 @@ export const trackGetStartPositions = (self: Track): TrackPointProjection[] => {
     const segment = segments[segmentIdx];
     const pos = splineCalculateSegmentPoint(segment, t, vec2New());
     const tangent = vec2Normalize(splineCalculateSegmentTangent(segment, t, vec2New()));
+    const width = trackGetTrackWidthAt(self, -1, segmentIdx, t);
 
-    return { segmentIdx, t, pos, tangent };
+    return { segmentIdx, t, pos, tangent, width };
   };
 
   let segmentIdx = 0;
   let t = 0;
-  for (let i = 0; i < 2; ++i) {
+  for (let i = 0; i < rows; ++i) {
     const sample = moveBackward(segmentIdx, t, kStartPosDistance + kStartPosDistanceFromStartLine);
     positions.push({
       mPathIdx: -1,
@@ -392,9 +408,9 @@ export const trackGetStartPositions = (self: Track): TrackPointProjection[] => {
       t: sample.t,
       mPos: sample.pos,
       mTangent: sample.tangent,
-      mWidth: segments[sample.segmentIdx].w0,
+      mWidth: sample.width,
       mInside: true,
-      mDistSqr: vec2Dot(sample.pos, sample.pos),
+      mDistSqr: vec2LengthSqr(sample.pos),
     });
 
     segmentIdx = sample.segmentIdx;
@@ -525,17 +541,6 @@ export const trackFindPointInTrack = (
       findClosestOnPath(self.secondaryPaths[pathIdx].segments, -1, pathIdx);
     }
   }
-};
-
-export const trackGetTrackWidthAt = (self: Track, pathIdx: number, segmentIdx: number, t: number) => {
-  const segments = (pathIdx === -1)
-    ? self.segments
-    : self.secondaryPaths[pathIdx]?.segments;
-  const segmentLen = segments?.length ?? 0;
-  
-  if (segmentLen === 0) return 0;
-  const segment = segments[trackWrapSegmentIndex(segmentIdx, segments.length)];
-  return mathLerp(segment.w0, segment.w1, t);
 };
 
 function sampleTrackSegment(

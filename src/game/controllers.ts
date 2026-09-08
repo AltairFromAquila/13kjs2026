@@ -29,6 +29,8 @@ export interface Controller {
   mIsBlockingPlayer: boolean;
   mWasStuck: boolean;
 
+  mReturningToTrack?: { mIsReturning: boolean; mTimer: number;};
+
   mProcessFunction: (self: Controller, racer: Racer, delta: number) => void;
 }
 
@@ -36,19 +38,21 @@ const kAIReactionTimeMin = 0.2;
 const kAIReactionTimeMaxDelta = 0.1;
 const kAIGallopingReactionTime = 0.06;
 const kAIBlockPlayerChance = 0.3;
-const kAISafeWidthFactor = 0.8;
-const kAIBlockPlayerSafeWidthFactor = 0.9;
+const kAISafeWidthFactor = 0.6;
+const kAIBlockPlayerSafeWidthFactor = 0.8;
 const kAIGallopLookaheadTOffsets = [0.1, 0.25, 0.5, 0.75, 1] as const;
 const kAIGallopLookaheadWeights = [0.35, 0.25, 0.2, 0.12, 0.08] as const;
-const kAIGallopEnterScore = 0.95;
+const kAIGallopEnterScore = 0.925;
 const kAIGallopKeepScore = 0.85;
 const kAIGallopStartStamina = 0.55;
 const kAIGallopKeepStamina = 0.15;
 const kAIGallopWaitThreshold = 0.6;
 
-const kPlayerGallopTapTimeout = 0.5;
+const kPlayerGallopTapTimeout = 0.3;
 const kPlayerSteeringCompressionMaxSpeed = 120;
 const kPlayerSteeringMinTurnScale = 0.5;
+
+const kReturnToTrackReCheck = 1.0;
 
 const playerInputState: PlayerInputState = {
   mEventListeners: {},
@@ -100,6 +104,53 @@ const controllerTranslatePlayerDirection = (x: number, y: number, racer: Racer, 
     outVec.x = mathCos(blendedAngle);
     outVec.y = mathSin(blendedAngle); 
   }
+};
+
+export const controllerIsPlayerControlled = (self: Controller) => {
+  return self.mProcessFunction === controllerProcessPlayerInput;
+};
+
+export const controllerReturnToTrack = (self: Controller, racer: Racer) => {
+  const trackPoint = racer.mTrackPoints[racer.mLastValidPathIdx];
+  let nextPathIdx = racer.mLastValidPathIdx;
+  let nextSegmentIdx = trackPoint.mSegmentIdx;
+  let nextT = trackPoint.t + ((self.mReturningToTrack?.mIsReturning) ? 0.1 : 0.25);
+
+  if (nextT > 1) {
+    nextT -= 1;
+
+    if (nextPathIdx > -1) {
+      const branchInPath = Game.mTrack.secondaryPaths[nextPathIdx].branchInPath;
+
+      nextPathIdx = branchInPath.path;
+      nextSegmentIdx = branchInPath.point;
+    } else {
+      nextSegmentIdx = trackWrapSegmentIndex(nextSegmentIdx + 1, Game.mTrack.segments.length);
+    }
+  }
+
+  // We use self.mDesiredDirection as a work vector
+  splineCalculateSegmentPoint(
+    (nextPathIdx > -1)
+      ? Game.mTrack.secondaryPaths[nextPathIdx].segments[nextSegmentIdx]
+      : Game.mTrack.segments[nextSegmentIdx],
+    nextT, self.mDesiredDirection
+  );
+  
+  vec2Normalize(
+    vec2Sub(self.mDesiredDirection, racer.mPos)
+  );
+
+  if (self.mReturningToTrack) {
+    self.mReturningToTrack.mIsReturning = true;
+    self.mReturningToTrack.mTimer = kReturnToTrackReCheck;
+  } else {
+    self.mReturningToTrack = { mIsReturning: true, mTimer: kReturnToTrackReCheck };
+  }
+
+  self.mIsGalloping = false;
+  self.mGallopTapPressed = false;
+  self.mIsWaitingForStamina = false;
 };
 
 export const controllerSetupPlayerInput = (self: Controller) => {
@@ -187,35 +238,53 @@ export const controllerRemovePlayerInput = () => {
 };
 
 export const controllerProcessPlayerInput = (self: Controller, racer: Racer, delta: number) => {
-  if (self.mGallopTapPressed) {
-    self.mGallopTapPressed = false;
-  }
+  if (self.mReturningToTrack?.mIsReturning) {
+    self.mReturningToTrack.mTimer -= delta;
 
-  if (playerInputState.mPressed.mGallop) {
-    playerInputState.mPressed.mGallop = false;
-    self.mGallopTapPressed = true;
-  }
+    if (self.mReturningToTrack.mTimer <= 0) {
+      controllerReturnToTrack(self, racer);
+    } else {
+      // Calculate current used track width relative to the track center
+      // We might get a bug where the racer could "cheat" by skipping a section of the track, but this is a rare edge case and not worth fixing for now
+      const trackPoint = racer.mTrackPoints[racer.mLastValidPathIdx];
+      const curOffset = vec2Sub(vec2Copy(vec2New(), racer.mPos), trackPoint.mPos);
+      const offsetThresholdSqr = 6 * 6;
 
-  if (racer.mStamina <= 0) {
-    self.mIsGalloping = false;
-    self.mIsWaitingForStamina = true;
-    playerInputState.mGallopingTimer = 0;
-  } else if (self.mIsWaitingForStamina && racer.mStamina > 0.33) {
-    self.mIsWaitingForStamina = false;
-  }
-
-  if (playerInputState.mGallopingTimer > 0) {
-    playerInputState.mGallopingTimer -= delta;
-    if (playerInputState.mGallopingTimer <= 0) {
-      playerInputState.mGallopingTimer = 0;
-      self.mIsGalloping = false;
+      if (vec2LengthSqr(curOffset) < offsetThresholdSqr) {
+        self.mReturningToTrack.mIsReturning = false;
+      }
     }
+  } else {
+    if (self.mGallopTapPressed) {
+      self.mGallopTapPressed = false;
+    }
+
+    if (playerInputState.mPressed.mGallop) {
+      playerInputState.mPressed.mGallop = false;
+      self.mGallopTapPressed = true;
+    }
+
+    if (racer.mStamina <= 0) {
+      self.mIsGalloping = false;
+      self.mIsWaitingForStamina = true;
+      playerInputState.mGallopingTimer = 0;
+    } else if (self.mIsWaitingForStamina && racer.mStamina > 0.33) {
+      self.mIsWaitingForStamina = false;
+    }
+
+    if (playerInputState.mGallopingTimer > 0) {
+      playerInputState.mGallopingTimer -= delta;
+      if (playerInputState.mGallopingTimer <= 0) {
+        playerInputState.mGallopingTimer = 0;
+        self.mIsGalloping = false;
+      }
+    }
+
+    const x = (playerInputState.mPressed.mRight ? 1 : 0) - (playerInputState.mPressed.mLeft ? 1 : 0);
+    const y = (playerInputState.mPressed.mDown ? 1 : 0) - (playerInputState.mPressed.mUp ? 1 : 0);
+
+    controllerTranslatePlayerDirection(x, y, racer, self.mDesiredDirection);
   }
-
-  const x = (playerInputState.mPressed.mRight ? 1 : 0) - (playerInputState.mPressed.mLeft ? 1 : 0);
-  const y = (playerInputState.mPressed.mDown ? 1 : 0) - (playerInputState.mPressed.mUp ? 1 : 0);
-
-  controllerTranslatePlayerDirection(x, y, racer, self.mDesiredDirection);
 };
 
 export const controllerProcessAIForRacer = (self: Controller, racer: Racer, delta: number) => {
@@ -391,7 +460,7 @@ export const controllerProcessAIForRacer = (self: Controller, racer: Racer, delt
       const targetWidthRatio = mathClamp(
         self.mIsBlockingPlayer
           ? playerWidthRatio
-          : (curUsedHalfWidth / curTrackHalfWidth) + (mathJs.random() * 0.2) - 0.1,
+          : (curUsedHalfWidth / curTrackHalfWidth) + (mathJs.random() * 0.5) - 0.25,
         -trackSafeWidthFactor, trackSafeWidthFactor
       );
 

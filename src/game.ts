@@ -4,7 +4,7 @@ import { tracks } from "./data/track.data";
 import { cloudsGenerate } from "./game/clouds";
 import { racerFixedTick, racerNew, racerRender, racerSetAngleFromVector, racerSetupTrackPoints, racerTick, type Racer } from "./game/racer";
 import { Track, trackDrawTexture, trackGetStartPositions, trackLoadData } from "./game/track";
-import { mathJs, mathTan, vec2Copy } from "./math";
+import { mathJs, mathTan, vec2Add, vec2Copy, vec2MulScalar, vec2New } from "./math";
 import { cameraFreeCamNew, cameraSetupFreeCamEvents, cameraHandleFreeCamInput, type FreeCamera, cameraGameCamNew, cameraGameCamTick, type GameCamera } from "./game/camera";
 import { kVerticalFov, type Camera } from "./core/camera";
 import { renderGameUI } from "./game/game-ui";
@@ -73,30 +73,43 @@ export const Game: Game = {
 }
 
 export const gameInit = () => {
-  trackLoadData(Game.mTrack, tracks[1]);
+  trackLoadData(Game.mTrack, tracks[0]);
   trackDrawTexture(Game.mTrack);
   cloudsGenerate();
   
-  const startPositions = trackGetStartPositions(Game.mTrack);
-  
-  for (let i = 0; i < Game.mRacers.length * 0.5; ++i) {
-    vec2Copy(Game.mRacers[i].mPos, startPositions[0].mPos);
-    racerSetAngleFromVector(Game.mRacers[i], startPositions[0].mTangent);
-    racerSetupTrackPoints(Game.mRacers[i], startPositions[0]);
+  const racersCount = Game.mRacers.length;
+  const startRows = 2;
+  const racersPerRow = mathJs.ceil(racersCount / startRows);
+  const startPositions = trackGetStartPositions(Game.mTrack, startRows);
 
-    Game.mRenderRacerCmd.mRenderables.push(Game.mRacers[i]);
-  }
-  for (let i = Game.mRacers.length * 0.5; i < Game.mRacers.length; ++i) {
-    vec2Copy(Game.mRacers[i].mPos, startPositions[1].mPos);
-    racerSetAngleFromVector(Game.mRacers[i], startPositions[1].mTangent);
-    racerSetupTrackPoints(Game.mRacers[i], startPositions[1]);
+  for (let idx = 0; idx < startRows; ++idx) {
+    const pos = startPositions[idx];
+    const racerDistance = pos.mWidth / (racersPerRow + 1);
+    const normal = vec2New(-pos.mTangent.y, pos.mTangent.x);
+    const firstRacerInRow = racersPerRow * idx;
+    const firstRacerInNextRow = racersPerRow * (idx + 1);
+    let widthFactor = (pos.mWidth * -0.5) + racerDistance;
 
-    Game.mRenderRacerCmd.mRenderables.push(Game.mRacers[i]);
+    for (let racerIdx = firstRacerInRow; racerIdx < firstRacerInNextRow && racerIdx < racersCount; ++racerIdx) {
+      const racer = Game.mRacers[racerIdx];
+
+      vec2Add(
+        vec2MulScalar(
+          vec2Copy(racer.mPos, normal),
+          widthFactor
+        ),
+        pos.mPos
+      );
+      racerSetAngleFromVector(racer, pos.mTangent);
+      racerSetupTrackPoints(racer, pos);
+
+      Game.mRenderRacerCmd.mRenderables.push(racer);
+      widthFactor += racerDistance;
+    }
   }
 
   (Game.mCamera as GameCamera).mTarget = Game.mRacers[0];
-  Game.mRacers[0].mIsPlayer = true;
-  Game.mRacers[0].mController.mProcessFunction = controllerProcessPlayerInput;
+  // Game.mRacers[0].mController.mProcessFunction = controllerProcessPlayerInput;
 
   controllerSetupPlayerInput(Game.mRacers[0].mController);
 

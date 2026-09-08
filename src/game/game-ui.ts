@@ -113,15 +113,14 @@ export const renderGameUI = (delta: number) => {
   ctxLineTo(ctx, width - (20 * scale), (69 * scale));
   ctx.stroke();
 
-  const tapPressed = Game.mRacers[0].mController.mGallopTapPressed;
   const rainbowGradient = ctx.createLinearGradient(width - (136 * scale), 0, width - (20 * scale), 0);
-  rainbowGradient.addColorStop(0.00, tapPressed ? '#f88c' : '#f00c');
-  rainbowGradient.addColorStop(0.17, tapPressed ? '#fb6c' : '#f80c');
-  rainbowGradient.addColorStop(0.33, tapPressed ? '#ff8c' : '#ff0c');
-  rainbowGradient.addColorStop(0.50, tapPressed ? '#8f8c' : '#0f0c');
-  rainbowGradient.addColorStop(0.67, tapPressed ? '#88fc' : '#00fc');
-  rainbowGradient.addColorStop(0.83, tapPressed ? '#d6cc' : '#408c');
-  rainbowGradient.addColorStop(1.00, tapPressed ? '#b8fc' : '#80fc');
+  rainbowGradient.addColorStop(0.00, '#f00c');
+  rainbowGradient.addColorStop(0.17, '#f80c');
+  rainbowGradient.addColorStop(0.33, '#ff0c');
+  rainbowGradient.addColorStop(0.50, '#0f0c');
+  rainbowGradient.addColorStop(0.67, '#00fc');
+  rainbowGradient.addColorStop(0.83, '#408c');
+  rainbowGradient.addColorStop(1.00, '#80fc');
   ctx.fillStyle = rainbowGradient;
   ctx.fillRect(width - (134 * scale), (20 * scale), (112 * scale) * Game.mRacers[0].mStamina, (13 * scale));  
 

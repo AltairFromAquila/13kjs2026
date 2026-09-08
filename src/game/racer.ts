@@ -5,7 +5,7 @@ import { Game } from "../game";
 import { kMathEpsilon, kMathHalfPi, kMathPi, kMathTau, mathClamp, mathCos, mathJs, mathLerp, mathMod, mathPingPong, mathSin, splineCalculateSegmentPoint, splineCalculateSegmentTangent, vec2Add, vec2ClampLength, vec2Copy, vec2CopyFromTuple, vec2Dot, vec2Length, vec2LengthSqr, vec2MulScalar, vec2New, vec2NewCopy, vec2Normalize, type Vec2 } from "../math";
 import { ctxBeginPath, ctxClosePathAndFill, ctxLineTo, ctxMoveTo, ctxSetFillStyle } from "../sys/context";
 import { newCircleCollider, type CircleCollider } from "./collision";
-import { controllerNew, controllerProcessAIForRacer, type Controller } from "./controllers";
+import { controllerIsPlayerControlled, controllerNew, controllerProcessAIForRacer, controllerReturnToTrack, type Controller } from "./controllers";
 import { trackCopyTrackPoint, trackFindPointInTrack, type TrackPointProjection } from "./track";
 
 const kRacerColRadius = 3 as const;
@@ -15,7 +15,9 @@ const kRacerMaxJogSpeed = 64 as const;
 const kRacerMaxSpeed = 120 as const;
 const kRacerMaxSpeedWhileGalloping = 180 as const;
 
-const kRacerGallopingMaxSpeedIncrement = 10 as const;
+const kRacerMaxSpeedIncrease = 0.8 as const;
+const kRacerReturnToTrackSpeedDecrease = -1 as const;
+const kRacerGallopingMaxSpeedIncrement = 12 as const;
 const kRacerGallopingMaxSpeedDecrease = -0.5 as const;
 
 const workTransformedNodes: TransformedRacerNode[] = []
@@ -87,8 +89,6 @@ export interface Racer extends Renderable {
   mLapTracker: number;
 
   mStamina: number;
-
-  mIsPlayer: boolean;
 }
 
 export const racerNew = (skeleton: SkeletonNode[], skeletonShapes: SkeletonNodeShapes): Racer => ({
@@ -123,7 +123,6 @@ export const racerNew = (skeleton: SkeletonNode[], skeletonShapes: SkeletonNodeS
   mLapTracker: 0,
 
   mStamina: 1,
-  mIsPlayer: false,
 });
 
 export const racerReset = (self: Racer) => {
@@ -192,13 +191,13 @@ export const racerFixedTick = (self: Racer, delta: number) => {
     }
   }
 
-  let acceleration = 0.3;
+  let acceleration = 0.5;
   if (speedSqr > 0 && vec2LengthSqr(self.mController.mDesiredDirection) > 0) {
     const velDir = vec2Normalize(vec2NewCopy(self.mVel));
     const velAlignment = vec2Dot(self.mController.mDesiredDirection, velDir);
     const velAlignmentRatio = (velAlignment - 1) * -0.5; // remap to [0, 1] range, where 0 is same direction, 1 is opposite direction
     const accelerationRatio = easeOutCubic(mathJs.min(speedSqr / kRacerMaxSpeed, 1));
-    const forardAcceleration = mathLerp(0.3, 4, accelerationRatio);
+    const forardAcceleration = mathLerp(0.5, 4, accelerationRatio);
     const backwardAcceleration = mathLerp(1, 16, accelerationRatio);
 
     acceleration = mathLerp(forardAcceleration, backwardAcceleration, easeOutCubic(velAlignmentRatio));
@@ -212,15 +211,20 @@ export const racerFixedTick = (self: Racer, delta: number) => {
       kRacerMaxSpeed,
       kRacerMaxSpeedWhileGalloping
     );
+  } else if (self.mController.mReturningToTrack?.mIsReturning && self.mMaxSpeed > kRacerMaxJogSpeed) {
+    self.mMaxSpeed += kRacerReturnToTrackSpeedDecrease;
+    if (self.mMaxSpeed < kRacerMaxJogSpeed) {
+      self.mMaxSpeed = kRacerMaxJogSpeed;
+    }
   } else if (self.mJogTime < 1) {
     if (self.mMaxSpeed > kRacerMaxSpeed) {
       self.mMaxSpeed += kRacerGallopingMaxSpeedDecrease * ((self.mStamina < 0.3) ? 1.5 : 1);
     }
 
     if (speedSqr > maxJogSpeedSqr * 0.9) {
-      self.mJogTime += delta / 3;
+      self.mJogTime += delta * 0.5;
     } else {
-      self.mJogTime -= delta / 3;
+      self.mJogTime -= delta * 0.5;
       if (self.mJogTime < 0) {
         self.mJogTime = 0;
       }
@@ -231,11 +235,14 @@ export const racerFixedTick = (self: Racer, delta: number) => {
         self.mMaxSpeed += kRacerGallopingMaxSpeedDecrease * ((self.mStamina < 0.3) ? 1.5 : 1);
       }
       if (self.mMaxSpeed < kRacerMaxSpeed) {
-        self.mMaxSpeed = kRacerMaxSpeed;
+        self.mMaxSpeed += kRacerMaxSpeedIncrease;
+        if (self.mMaxSpeed > kRacerMaxSpeed) {
+          self.mMaxSpeed = kRacerMaxSpeed;
+        }
       }
     } else {
       self.mMaxSpeed = kRacerMaxJogSpeed;
-      self.mJogTime -= delta / 2;
+      self.mJogTime -= delta * 0.5;
       if (self.mJogTime < 0) {
         self.mJogTime = 0;
       }
@@ -247,7 +254,7 @@ export const racerFixedTick = (self: Racer, delta: number) => {
   vec2Add(self.mVel, motion);
 
   // Fixed-step damping to avoid endless coasting while keeping steering responsive.
-  vec2MulScalar(self.mVel, hasInput ? 0.98 : 0.9);
+  vec2MulScalar(self.mVel, hasInput ? 0.98 : 0.95);
   if (vec2LengthSqr(self.mVel) < 0.01) {
     self.mVel.x = 0;
     self.mVel.y = 0;
@@ -255,10 +262,6 @@ export const racerFixedTick = (self: Racer, delta: number) => {
 
   vec2ClampLength(self.mVel, 0, self.mMaxSpeed);
 
-  // vec2MulScalar(
-  //   vec2Copy(self.mVel, self.mController.mDesiredDirection),
-  //   mathLerp(60, 120, mathJs.random()) * gallopingFactor
-  // );
   if (vec2LengthSqr(self.mVel) > 0) {
     racerSetAngleFromVector(self, self.mVel);
   }
@@ -335,12 +338,34 @@ export const racerFixedTick = (self: Racer, delta: number) => {
   if (isInsideAnyPath) {
     self.mLastValidPathIdx = bestPathIdx;
   } else {
-    console.log('Racer is outside of all paths!');
+    // On sharp corners, there is an issue where it might feel the player never left the track. I might fix it later
     // Activate autopilot to return to the track
+    if (controllerIsPlayerControlled(self.mController) && !self.mController.mReturningToTrack?.mIsReturning) {
+      controllerReturnToTrack(self.mController, self);
+    }
   }
 };
 
 export const racerTick = (self: Racer, delta: number) => {
+  const speedSqr = vec2LengthSqr(self.mVel);
+  const sprintAnimThreshold = kRacerMaxJogSpeed * kRacerMaxJogSpeed * 1.1;
+  const gallopMaxSpeedSqr = kRacerMaxSpeedWhileGalloping * kRacerMaxSpeedWhileGalloping;
+  
+  if (speedSqr > sprintAnimThreshold) {
+    self.mAnimIdx = 3;
+    self.mAnimSpeed = mathLerp(0.8, 2, mathJs.min(1, speedSqr / gallopMaxSpeedSqr));
+  } else if (speedSqr > 0) {
+    self.mAnimIdx = 2;
+    self.mAnimSpeed = mathLerp(0.1, 1.5, speedSqr / sprintAnimThreshold);
+  } else {
+    self.mAnimIdx = 1;
+    self.mAnimSpeed = mathLerp(0.4, 1, mathJs.random());
+  }
+
+  // if (Game.mRacers[0] === self) {
+  //   console.log(self.mAnimSpeed);
+  // }
+
   self.mAnimTime = (self.mAnimTime + (delta * self.mAnimSpeed)) % 1; // All animations have a total duration of 1.0, so we can wrap the time to stay within that range.
 };
 
@@ -512,7 +537,7 @@ export const racerRender = (
 
   ctx.save();
   ctx.globalCompositeOperation = "source-over";
-  ctx.globalAlpha = alpha;
+  ctx.globalAlpha = alpha * (self.mController.mReturningToTrack?.mIsReturning ? 0.25 : 1);
 
   const drawCircle = (x: number, y: number, radius: number, color: string) => {
     ctxSetFillStyle(ctx, color);
