@@ -5,7 +5,7 @@ import { Game } from "../game";
 import { kMathEpsilon, kMathHalfPi, kMathPi, kMathTau, mathClamp, mathCos, mathJs, mathLerp, mathMod, mathPingPong, mathSin, splineCalculateSegmentPoint, splineCalculateSegmentTangent, vec2Add, vec2ClampLength, vec2Copy, vec2CopyFromTuple, vec2Dot, vec2Length, vec2LengthSqr, vec2MulScalar, vec2New, vec2NewCopy, vec2Normalize, type Vec2 } from "../math";
 import { ctxBeginPath, ctxClosePathAndFill, ctxLineTo, ctxMoveTo, ctxSetFillStyle } from "../sys/context";
 import { newCircleCollider, type CircleCollider } from "./collision";
-import { controllerProcessAIForRacer, type AIController } from "./controllers";
+import { controllerNew, controllerProcessAIForRacer, type Controller } from "./controllers";
 import { trackCopyTrackPoint, trackFindPointInTrack, type TrackPointProjection } from "./track";
 
 const kRacerColRadius = 3 as const;
@@ -66,7 +66,7 @@ export interface Racer extends Renderable {
   mMidCol: CircleCollider;
   mBackCol: CircleCollider;
 
-  mController: AIController;
+  mController: Controller;
 
   mTrackPoints: { [pathIdx: number]: TrackPointProjection };
   mLastValidPathIdx: number;
@@ -113,7 +113,7 @@ export const racerNew = (skeleton: SkeletonNode[], skeletonShapes: SkeletonNodeS
   mAnimTime: 0,
   mAnimSpeed: 1,
 
-  mController: { mDesiredDirection: vec2New(), mPreviousSegmentT: 0, mReactionTimer: 0, mIsBlockingPlayer: false, mBlockPlayerTimer: 0, mIsWaitingForStamina: false, mIsGalloping: false, mPreviousSegmentIdx: -1, mGallopingReactionTimer: 0, mWasStuck: false, mGallopTapPressed: false },
+  mController: controllerNew(),
 
   mTotalTime: 0,
   mLapTime: 0,
@@ -168,17 +168,19 @@ export const racerSetAngle = (self: Racer, angle: number) => {
 export const racerSetAngleFromVector = (self: Racer, vec: Vec2) => racerSetAngle(self, mathJs.atan2(vec.y, vec.x));
 
 export const racerFixedTick = (self: Racer, delta: number) => {
-  if (!self.mIsPlayer) {
-    controllerProcessAIForRacer(self.mController, self, delta);
-  }
+  self.mController.mProcessFunction(self.mController, self, delta);
 
   const prevPos = vec2NewCopy(self.mPos);
 
   self.mTotalTime += delta;
   self.mLapTime += delta;
 
+  const speedSqr = vec2LengthSqr(self.mVel);
+  const maxJogSpeedSqr = kRacerMaxJogSpeed * kRacerMaxJogSpeed;
+
   if (self.mController.mIsGalloping) {
-    self.mStamina -= delta * 0.1; // Decrease stamina continuously while galloping
+    const staminaDrainRate = mathLerp(0, 0.1, mathJs.min(speedSqr / maxJogSpeedSqr, 1));
+    self.mStamina -= delta * staminaDrainRate; // Decrease stamina continuously while galloping
 
     if (self.mStamina < 0) {
       self.mStamina = 0;
@@ -190,13 +192,16 @@ export const racerFixedTick = (self: Racer, delta: number) => {
     }
   }
 
-  let acceleration = 4;
-  if (vec2LengthSqr(self.mVel) > 0 && vec2LengthSqr(self.mController.mDesiredDirection) > 0) {
+  let acceleration = 0.3;
+  if (speedSqr > 0 && vec2LengthSqr(self.mController.mDesiredDirection) > 0) {
     const velDir = vec2Normalize(vec2NewCopy(self.mVel));
     const velAlignment = vec2Dot(self.mController.mDesiredDirection, velDir);
     const velAlignmentRatio = (velAlignment - 1) * -0.5; // remap to [0, 1] range, where 0 is same direction, 1 is opposite direction
+    const accelerationRatio = easeOutCubic(mathJs.min(speedSqr / kRacerMaxSpeed, 1));
+    const forardAcceleration = mathLerp(0.3, 4, accelerationRatio);
+    const backwardAcceleration = mathLerp(1, 16, accelerationRatio);
 
-    acceleration = mathLerp(4, 16, easeOutCubic(velAlignmentRatio));
+    acceleration = mathLerp(forardAcceleration, backwardAcceleration, easeOutCubic(velAlignmentRatio));
   }
 
   if (self.mController.mIsGalloping) {
@@ -208,7 +213,11 @@ export const racerFixedTick = (self: Racer, delta: number) => {
       kRacerMaxSpeedWhileGalloping
     );
   } else if (self.mJogTime < 1) {
-    if (vec2LengthSqr(self.mVel) > kRacerMaxJogSpeed * kRacerMaxJogSpeed * 0.9) {
+    if (self.mMaxSpeed > kRacerMaxSpeed) {
+      self.mMaxSpeed += kRacerGallopingMaxSpeedDecrease * ((self.mStamina < 0.3) ? 1.5 : 1);
+    }
+
+    if (speedSqr > maxJogSpeedSqr * 0.9) {
       self.mJogTime += delta / 3;
     } else {
       self.mJogTime -= delta / 3;
@@ -217,7 +226,7 @@ export const racerFixedTick = (self: Racer, delta: number) => {
       }
     }
   } else {
-    if (vec2LengthSqr(self.mVel) > kRacerMaxJogSpeed * kRacerMaxJogSpeed * 0.25) {
+    if (speedSqr > maxJogSpeedSqr * 0.25) {
       if (self.mMaxSpeed > kRacerMaxSpeed) {
         self.mMaxSpeed += kRacerGallopingMaxSpeedDecrease * ((self.mStamina < 0.3) ? 1.5 : 1);
       }

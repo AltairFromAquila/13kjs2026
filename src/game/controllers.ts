@@ -1,9 +1,19 @@
 import { Game } from "../game";
-import { kMathEpsilon, mathClamp, mathJs, splineCalculateSegmentPoint, splineCalculateSegmentTangent, vec2Add, vec2Copy, vec2Distance, vec2DistanceSqr, vec2Dot, vec2Lerp, vec2MulScalar, vec2New, vec2NewCopy, vec2Normalize, vec2Sub, type Vec2 } from "../math";
+import { kMathEpsilon, mathClamp, mathCos, mathJs, mathLerpAngle, mathSin, splineCalculateSegmentPoint, splineCalculateSegmentTangent, vec2Add, vec2Copy, vec2Distance, vec2DistanceSqr, vec2Dot, vec2LengthSqr, vec2Lerp, vec2MulScalar, vec2New, vec2NewCopy, vec2Normalize, vec2Sub, type Vec2 } from "../math";
+import { windowAddEventListener, windowRemoveEventListener } from "../sys/window";
 import type { Racer } from "./racer";
 import { trackGetTrackWidthAt, trackWrapSegmentIndex } from "./track";
 
-export interface AIController {
+type KeyBoardEventListener = (event: KeyboardEvent) => void;
+
+interface PlayerInputState {
+  mEventListeners: { [event: string]: KeyBoardEventListener | undefined };
+  mPressed: { mUp: boolean; mDown: boolean; mLeft: boolean; mRight: boolean; mGallop: boolean; };
+  mDirection: Vec2;
+  mGallopingTimer: number;
+}
+
+export interface Controller {
   mDesiredDirection: Vec2;
   mGallopTapPressed: boolean;
   mIsGalloping: boolean;
@@ -18,6 +28,8 @@ export interface AIController {
   mIsWaitingForStamina: boolean;
   mIsBlockingPlayer: boolean;
   mWasStuck: boolean;
+
+  mProcessFunction: (self: Controller, racer: Racer, delta: number) => void;
 }
 
 const kAIReactionTimeMin = 0.2;
@@ -32,13 +44,186 @@ const kAIGallopEnterScore = 0.95;
 const kAIGallopKeepScore = 0.85;
 const kAIGallopStartStamina = 0.55;
 const kAIGallopKeepStamina = 0.15;
+const kAIGallopWaitThreshold = 0.6;
 
-export const controllerProcessAIForRacer = (self: AIController, racer: Racer, delta: number) => {
+const kPlayerGallopTapTimeout = 0.5;
+const kPlayerSteeringCompressionMaxSpeed = 120;
+const kPlayerSteeringMinTurnScale = 0.5;
+
+const playerInputState: PlayerInputState = {
+  mEventListeners: {},
+  mPressed: { mUp: false, mDown: false, mLeft: false, mRight: false, mGallop: false },
+  mDirection: vec2New(),
+  mGallopingTimer: 0,
+};
+
+export const controllerNew = (): Controller => ({
+  mDesiredDirection: vec2New(),
+  mGallopTapPressed: false,
+  mIsGalloping: false,
+
+  mPreviousSegmentIdx: -1,
+  mPreviousSegmentT: 0,
+
+  mBlockPlayerTimer: 0,
+  mGallopingReactionTimer: 0,
+  mReactionTimer: 0,
+
+  mIsWaitingForStamina: false,
+  mIsBlockingPlayer: false,
+  mWasStuck: false,
+
+  mProcessFunction: controllerProcessAIForRacer,
+});
+
+const controllerTranslatePlayerDirection = (x: number, y: number, racer: Racer, outVec: Vec2) => {
+  const camAngle = Game.mCamera.mAngle;
+  const camSin = mathSin(camAngle);
+  const camCos = mathCos(camAngle);
+
+  outVec.x = (x * camCos) - (y * camSin);
+  outVec.y = (x * camSin) + (y * camCos);
+
+  vec2Normalize(outVec);
+
+  const outVecLengthSqr = vec2LengthSqr(outVec);
+  const speedSqr = vec2LengthSqr(racer.mVel);
+  if (outVecLengthSqr > 0 && speedSqr > kMathEpsilon) {
+    const steeringCompressionSqr = kPlayerSteeringCompressionMaxSpeed * kPlayerSteeringCompressionMaxSpeed;
+    const speedRatio = mathClamp(speedSqr / steeringCompressionSqr, 0, 1);
+    const turnScale = 1 - ((1 - kPlayerSteeringMinTurnScale) * speedRatio);
+
+    const velocityAngle = mathJs.atan2(racer.mVel.y, racer.mVel.x);
+    const desiredAngle = mathJs.atan2(outVec.y, outVec.x);
+    const blendedAngle = mathLerpAngle(velocityAngle, desiredAngle, turnScale);
+
+    outVec.x = mathCos(blendedAngle);
+    outVec.y = mathSin(blendedAngle); 
+  }
+};
+
+export const controllerSetupPlayerInput = (self: Controller) => {
+  const onKeyDown: KeyBoardEventListener = (event) => {
+    switch (event.code) {
+      case "KeyW":
+      case "ArrowUp":
+        if (!playerInputState.mPressed.mUp) {
+          playerInputState.mPressed.mUp = true;
+        }
+        break;
+      case "KeyS":
+      case "ArrowDown":
+        if (!playerInputState.mPressed.mDown) {
+          playerInputState.mPressed.mDown = true;
+        }
+        break;
+      case "KeyA":
+      case "ArrowLeft":
+        if (!playerInputState.mPressed.mLeft) {
+          playerInputState.mPressed.mLeft = true;
+        }
+        break;
+      case "KeyD":
+      case "ArrowRight":
+        if (!playerInputState.mPressed.mRight) {
+          playerInputState.mPressed.mRight = true;
+        }
+        break;
+      case "KeyK":
+        if (!event.repeat && self && !self.mIsWaitingForStamina) {
+          self.mIsGalloping = true;
+          playerInputState.mPressed.mGallop = true;
+          playerInputState.mGallopingTimer = kPlayerGallopTapTimeout;
+        }
+        break;
+    }
+  };
+
+  const onKeyUp: KeyBoardEventListener = (event) => {
+    switch (event.code) {
+      case "KeyW":
+      case "ArrowUp":
+        if (playerInputState.mPressed.mUp) {
+          playerInputState.mPressed.mUp = false;
+        }
+        break;
+      case "KeyS":
+      case "ArrowDown":
+        if (playerInputState.mPressed.mDown) {
+          playerInputState.mPressed.mDown = false;
+        }
+        break;
+      case "KeyA":
+      case "ArrowLeft":
+        if (playerInputState.mPressed.mLeft) {
+          playerInputState.mPressed.mLeft = false;
+        }
+        break;
+      case "KeyD":
+      case "ArrowRight":
+        if (playerInputState.mPressed.mRight) {
+          playerInputState.mPressed.mRight = false;
+        }
+        break;
+    }
+  };
+
+  playerInputState.mEventListeners['keydown'] = onKeyDown;
+  playerInputState.mEventListeners['keyup'] = onKeyUp;
+
+  windowAddEventListener('keydown', onKeyDown);
+  windowAddEventListener('keyup', onKeyUp);
+};
+
+export const controllerRemovePlayerInput = () => {
+  if (playerInputState.mEventListeners['keydown']) {
+    windowRemoveEventListener('keydown', playerInputState.mEventListeners['keydown']);
+    playerInputState.mEventListeners['keydown'] = undefined;
+  }
+  if (playerInputState.mEventListeners['keyup']) {
+    windowRemoveEventListener('keyup', playerInputState.mEventListeners['keyup']);
+    playerInputState.mEventListeners['keyup'] = undefined;
+  }
+};
+
+export const controllerProcessPlayerInput = (self: Controller, racer: Racer, delta: number) => {
+  if (self.mGallopTapPressed) {
+    self.mGallopTapPressed = false;
+  }
+
+  if (playerInputState.mPressed.mGallop) {
+    playerInputState.mPressed.mGallop = false;
+    self.mGallopTapPressed = true;
+  }
+
+  if (racer.mStamina <= 0) {
+    self.mIsGalloping = false;
+    self.mIsWaitingForStamina = true;
+    playerInputState.mGallopingTimer = 0;
+  } else if (self.mIsWaitingForStamina && racer.mStamina > 0.33) {
+    self.mIsWaitingForStamina = false;
+  }
+
+  if (playerInputState.mGallopingTimer > 0) {
+    playerInputState.mGallopingTimer -= delta;
+    if (playerInputState.mGallopingTimer <= 0) {
+      playerInputState.mGallopingTimer = 0;
+      self.mIsGalloping = false;
+    }
+  }
+
+  const x = (playerInputState.mPressed.mRight ? 1 : 0) - (playerInputState.mPressed.mLeft ? 1 : 0);
+  const y = (playerInputState.mPressed.mDown ? 1 : 0) - (playerInputState.mPressed.mUp ? 1 : 0);
+
+  controllerTranslatePlayerDirection(x, y, racer, self.mDesiredDirection);
+};
+
+export const controllerProcessAIForRacer = (self: Controller, racer: Racer, delta: number) => {
   self.mBlockPlayerTimer -= delta;
   self.mReactionTimer -= delta;
   self.mGallopTapPressed = false;
 
-  if (self.mIsWaitingForStamina && racer.mStamina > 0.8) {
+  if (self.mIsWaitingForStamina && racer.mStamina > kAIGallopWaitThreshold) {
     self.mIsWaitingForStamina = false;
   } else if (self.mIsGalloping && racer.mStamina <= 0) {
     self.mIsGalloping = false;

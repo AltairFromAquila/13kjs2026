@@ -8,6 +8,7 @@ import { mathJs, mathTan, vec2Copy } from "./math";
 import { cameraFreeCamNew, cameraSetupFreeCamEvents, cameraHandleFreeCamInput, type FreeCamera, cameraGameCamNew, cameraGameCamTick, type GameCamera } from "./game/camera";
 import { kVerticalFov, type Camera } from "./core/camera";
 import { renderGameUI } from "./game/game-ui";
+import { controllerProcessPlayerInput, controllerSetupPlayerInput } from "./game/controllers";
 
 const kTargetTickTime = 1/120;
 
@@ -72,7 +73,7 @@ export const Game: Game = {
 }
 
 export const gameInit = () => {
-  trackLoadData(Game.mTrack, tracks[0]);
+  trackLoadData(Game.mTrack, tracks[1]);
   trackDrawTexture(Game.mTrack);
   cloudsGenerate();
   
@@ -94,6 +95,10 @@ export const gameInit = () => {
   }
 
   (Game.mCamera as GameCamera).mTarget = Game.mRacers[0];
+  Game.mRacers[0].mIsPlayer = true;
+  Game.mRacers[0].mController.mProcessFunction = controllerProcessPlayerInput;
+
+  controllerSetupPlayerInput(Game.mRacers[0].mController);
 
   // cameraSetupFreeCamEvents(Game.mCamera as FreeCamera);
 

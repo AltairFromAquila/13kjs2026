@@ -93,7 +93,7 @@ export const renderGameUI = (delta: number) => {
   ctx.font = `bold ${(18 * scale) | 0}px ${fontFamily}`;
   ctx.fillStyle = '#fff';
   ctx.fillText('/ 8', (64 * scale), (68 * scale));
-  ctx.fillText(`${Game.mRacers[0].mLap}`, (120 * scale), (42 * scale));
+  ctx.fillText(`${Game.mRacers[0].mLap || 1}`, (120 * scale), (42 * scale));
   ctx.fillText('/ 3', (136 * scale), (42 * scale));
 
   ctx.font = `bold ${(12 * scale) | 0}px ${fontFamily}`;
@@ -123,7 +123,7 @@ export const renderGameUI = (delta: number) => {
   rainbowGradient.addColorStop(0.83, tapPressed ? '#d6cc' : '#408c');
   rainbowGradient.addColorStop(1.00, tapPressed ? '#b8fc' : '#80fc');
   ctx.fillStyle = rainbowGradient;
-  ctx.fillRect(width - (134 * scale), (20 * scale), (113 * scale) * Game.mRacers[0].mStamina, (13 * scale));  
+  ctx.fillRect(width - (134 * scale), (20 * scale), (112 * scale) * Game.mRacers[0].mStamina, (13 * scale));  
 
   ctx.font = `bold ${(32 * scale) | 0}px ${fontFamily}`;
   ctx.fillStyle = `hsl(${textHue}, 100%, 85%)`;
@@ -212,7 +212,7 @@ export const renderGameUI = (delta: number) => {
     } else {
       if (playerPosition === 1) {
         if (Game.mRacers[0].mLap > (leaderRacer.mLap + 1)) {
-          const lapDelta = leaderRacer.mLap - Game.mRacers[0].mLap;
+          const lapDelta = leaderRacer.mLap - Game.mRacers[0].mLap + 1;
           gapTimeText = `${lapDelta} LAP${lapDelta > 1 ? 'S' : ''}`;
           gapTimeColor = '#7f7';
           
