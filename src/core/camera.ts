@@ -1,7 +1,7 @@
 import { kMathPi } from "../math";
-import type { Renderable } from "./render";
+import type { Entity } from "./entity";
 
-export interface Camera extends Renderable {
+export interface Camera extends Entity {
   mPitch: number;
   mHeight: number;
   mVerticalFov: number;

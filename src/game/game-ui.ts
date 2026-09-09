@@ -1,5 +1,5 @@
 import { Game } from "../game";
-import { vec2Length } from "../math";
+import { mathFloor, vec2Length } from "../math";
 import { ctx, ctxBeginPath, ctxLineTo, ctxMoveTo } from "../sys/context";
 
 let textHue = 44;
@@ -139,9 +139,9 @@ export const renderGameUI = (delta: number) => {
   ctx.font = `bold ${(18 * scale) | 0}px ${fontFamily}`;
 
   const drawTimeElement = (time: number, y: number, scale: number) => {
-    const seconds = Math.floor(time);
-    const milliseconds = Math.floor((time - seconds) * 1000);
-    const minutes = Math.floor(seconds / 60);
+    const seconds = time | 0;
+    const milliseconds = mathFloor((time - seconds) * 1000);
+    const minutes = mathFloor(seconds / 60);
     const remainingSeconds = seconds % 60;
 
     ctx.textAlign = 'left';

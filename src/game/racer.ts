@@ -2,14 +2,13 @@ import type { Renderable } from "../core/render";
 import { racerAnimations, racerMirrorNodes, type SkeletonNode, type SkeletonNodeShapes } from "../data/racer.data";
 import { easeOutCubic } from "../easing";
 import { Game } from "../game";
-import { kMathEpsilon, kMathHalfPi, kMathPi, kMathTau, mathClamp, mathCos, mathJs, mathLerp, mathMod, mathPingPong, mathSin, splineCalculateSegmentPoint, splineCalculateSegmentTangent, vec2Add, vec2ClampLength, vec2Copy, vec2CopyFromTuple, vec2Dot, vec2Length, vec2LengthSqr, vec2MulScalar, vec2New, vec2NewCopy, vec2Normalize, type Vec2 } from "../math";
+import { kMathEpsilon, kMathHalfPi, kMathPi, kMathTau, mathAbs, mathAtan2, mathCeil, mathClamp, mathCos, mathHypot, mathJs, mathLerp, mathMax, mathMin, mathMod, mathPingPong, mathRandom, mathSin, mathSqrt, splineCalculateSegmentPoint, splineCalculateSegmentTangent, vec2Add, vec2ClampLength, vec2Copy, vec2CopyFromTuple, vec2Dot, vec2Length, vec2LengthSqr, vec2MulScalar, vec2New, vec2NewCopy, vec2Normalize, type Vec2 } from "../math";
 import { ctxBeginPath, ctxClosePathAndFill, ctxLineTo, ctxMoveTo, ctxSetFillStyle } from "../sys/context";
-import { newCircleCollider, type CircleCollider } from "./collision";
-import { controllerIsPlayerControlled, controllerNew, controllerProcessAIForRacer, controllerReturnToTrack, type Controller } from "./controllers";
+import { collisionNewCircleCollider, collisionResolveCollisions, collisionSyncColliders, type CircleCollider, type PhysicEntity } from "./collision";
+import { controllerIsPlayerControlled, controllerNew, controllerReturnToTrack, type Controller } from "./controllers";
 import { trackCopyTrackPoint, trackFindPointInTrack, type TrackPointProjection } from "./track";
 
 const kRacerColRadius = 3 as const;
-const kRacerColDiameter = 6 as const;
 
 const kRacerMaxJogSpeed = 64 as const;
 const kRacerMaxSpeed = 120 as const;
@@ -60,20 +59,15 @@ interface TransformedRacerNodeShape {
 
 type TransformedRacerNodeEntry = TransformedRacerNode | TransformedRacerNodeShape;
 
-export interface Racer extends Renderable {
+export interface Racer extends Renderable, PhysicEntity {
   mSkeleton: SkeletonNode[];
   mSkeletonShapes: SkeletonNodeShapes;
-
-  mFrontCol: CircleCollider;
-  mMidCol: CircleCollider;
-  mBackCol: CircleCollider;
 
   mController: Controller;
 
   mTrackPoints: { [pathIdx: number]: TrackPointProjection };
   mLastValidPathIdx: number;
 
-  mVel: Vec2;
   mMaxSpeed: number;
   mJogTime: number;
 
@@ -92,19 +86,21 @@ export interface Racer extends Renderable {
 }
 
 export const racerNew = (skeleton: SkeletonNode[], skeletonShapes: SkeletonNodeShapes): Racer => ({
+  mPos: vec2New(),
+  mScreenPos: vec2New(),
+  mAngle: 0,
+
+  mFrontCol: collisionNewCircleCollider(kRacerColRadius),
+  mMidCol: collisionNewCircleCollider(kRacerColRadius),
+  mBackCol: collisionNewCircleCollider(kRacerColRadius),
+  mVel: vec2New(),
+  mColVel: vec2New(),
+
   mSkeleton: skeleton,
   mSkeletonShapes: skeletonShapes,
 
-  mFrontCol: newCircleCollider(kRacerColRadius),
-  mMidCol: newCircleCollider(kRacerColRadius),
-  mBackCol: newCircleCollider(kRacerColRadius),
-
   mTrackPoints: {},
   mLastValidPathIdx: -1,
-
-  mPos: { x: 0, y: 0 },
-  mVel: { x: 0, y: 0 },
-  mAngle: 0,
 
   mMaxSpeed: kRacerMaxJogSpeed,
   mJogTime: 0,
@@ -126,11 +122,11 @@ export const racerNew = (skeleton: SkeletonNode[], skeletonShapes: SkeletonNodeS
 });
 
 export const racerReset = (self: Racer) => {
-  self.mPos.x = self.mPos.y = self.mVel.x = self.mVel.y = self.mFrontCol.pos.y =
-  self.mMidCol.pos.x = self.mMidCol.pos.y = self.mBackCol.pos.y = 0;
+  self.mPos.x = self.mPos.y = self.mVel.x = self.mVel.y = self.mFrontCol.mPos.y =
+  self.mMidCol.mPos.x = self.mMidCol.mPos.y = self.mBackCol.mPos.y = 0;
 
-  self.mFrontCol.pos.x = kRacerColDiameter;
-  self.mBackCol.pos.x = -kRacerColDiameter;
+  self.mFrontCol.mPos.x = kRacerColRadius;
+  self.mBackCol.mPos.x = -kRacerColRadius;
 
   self.mLastValidPathIdx = -1;
 
@@ -154,17 +150,17 @@ export const racerSetAngle = (self: Racer, angle: number) => {
   const c = mathCos(angle);
   const s = mathSin(angle);
 
-  self.mFrontCol.pos.x = self.mPos.x + c * kRacerColDiameter;
-  self.mFrontCol.pos.y = self.mPos.y + s * kRacerColDiameter;
+  self.mFrontCol.mPos.x = self.mPos.x + c * kRacerColRadius;
+  self.mFrontCol.mPos.y = self.mPos.y + s * kRacerColRadius;
 
-  self.mMidCol.pos.x = self.mPos.x;
-  self.mMidCol.pos.y = self.mPos.y;
+  self.mMidCol.mPos.x = self.mPos.x;
+  self.mMidCol.mPos.y = self.mPos.y;
 
-  self.mBackCol.pos.x = self.mPos.x - c * kRacerColDiameter;
-  self.mBackCol.pos.y = self.mPos.y - s * kRacerColDiameter;
+  self.mBackCol.mPos.x = self.mPos.x - c * kRacerColRadius;
+  self.mBackCol.mPos.y = self.mPos.y - s * kRacerColRadius;
 };
 
-export const racerSetAngleFromVector = (self: Racer, vec: Vec2) => racerSetAngle(self, mathJs.atan2(vec.y, vec.x));
+export const racerSetAngleFromVector = (self: Racer, vec: Vec2) => racerSetAngle(self, mathAtan2(vec.y, vec.x));
 
 export const racerFixedTick = (self: Racer, delta: number) => {
   self.mController.mProcessFunction(self.mController, self, delta);
@@ -178,7 +174,7 @@ export const racerFixedTick = (self: Racer, delta: number) => {
   const maxJogSpeedSqr = kRacerMaxJogSpeed * kRacerMaxJogSpeed;
 
   if (self.mController.mIsGalloping) {
-    const staminaDrainRate = mathLerp(0, 0.1, mathJs.min(speedSqr / maxJogSpeedSqr, 1));
+    const staminaDrainRate = mathLerp(0, 0.1, mathMin(speedSqr / maxJogSpeedSqr, 1));
     self.mStamina -= delta * staminaDrainRate; // Decrease stamina continuously while galloping
 
     if (self.mStamina < 0) {
@@ -196,14 +192,19 @@ export const racerFixedTick = (self: Racer, delta: number) => {
     const velDir = vec2Normalize(vec2NewCopy(self.mVel));
     const velAlignment = vec2Dot(self.mController.mDesiredDirection, velDir);
     const velAlignmentRatio = (velAlignment - 1) * -0.5; // remap to [0, 1] range, where 0 is same direction, 1 is opposite direction
-    const accelerationRatio = easeOutCubic(mathJs.min(speedSqr / kRacerMaxSpeed, 1));
+    const accelerationRatio = easeOutCubic(mathMin(speedSqr / kRacerMaxSpeed, 1));
     const forardAcceleration = mathLerp(0.5, 4, accelerationRatio);
     const backwardAcceleration = mathLerp(1, 16, accelerationRatio);
 
     acceleration = mathLerp(forardAcceleration, backwardAcceleration, easeOutCubic(velAlignmentRatio));
   }
 
-  if (self.mController.mIsGalloping) {
+  if (self.mController.mReturningToTrack?.mIsReturning && self.mMaxSpeed > kRacerMaxJogSpeed) {
+    self.mMaxSpeed += kRacerReturnToTrackSpeedDecrease;
+    if (self.mMaxSpeed < kRacerMaxJogSpeed) {
+      self.mMaxSpeed = kRacerMaxJogSpeed;
+    }
+  } else if (self.mController.mIsGalloping) {
     self.mMaxSpeed = mathClamp(
       self.mMaxSpeed + (self.mController.mGallopTapPressed
         ? kRacerGallopingMaxSpeedIncrement
@@ -211,11 +212,6 @@ export const racerFixedTick = (self: Racer, delta: number) => {
       kRacerMaxSpeed,
       kRacerMaxSpeedWhileGalloping
     );
-  } else if (self.mController.mReturningToTrack?.mIsReturning && self.mMaxSpeed > kRacerMaxJogSpeed) {
-    self.mMaxSpeed += kRacerReturnToTrackSpeedDecrease;
-    if (self.mMaxSpeed < kRacerMaxJogSpeed) {
-      self.mMaxSpeed = kRacerMaxJogSpeed;
-    }
   } else if (self.mJogTime < 1) {
     if (self.mMaxSpeed > kRacerMaxSpeed) {
       self.mMaxSpeed += kRacerGallopingMaxSpeedDecrease * ((self.mStamina < 0.3) ? 1.5 : 1);
@@ -253,7 +249,6 @@ export const racerFixedTick = (self: Racer, delta: number) => {
   const motion = vec2MulScalar(vec2NewCopy(self.mController.mDesiredDirection), acceleration);
   vec2Add(self.mVel, motion);
 
-  // Fixed-step damping to avoid endless coasting while keeping steering responsive.
   vec2MulScalar(self.mVel, hasInput ? 0.98 : 0.95);
   if (vec2LengthSqr(self.mVel) < 0.01) {
     self.mVel.x = 0;
@@ -269,7 +264,24 @@ export const racerFixedTick = (self: Racer, delta: number) => {
   const prevMainSegmentIdx = self.mTrackPoints[-1]?.mSegmentIdx ?? 0;
 
   vec2Add(self.mPos, vec2MulScalar(vec2NewCopy(self.mVel), delta));
-  trackFindPointInTrack(Game.mTrack, self.mPos, -1, 0, self.mTrackPoints);
+
+  if (controllerIsPlayerControlled(self.mController)) {
+    collisionSyncColliders(self);
+    collisionResolveCollisions(self);
+    vec2Add(self.mPos, vec2MulScalar(vec2NewCopy(self.mColVel), delta));
+    vec2MulScalar(self.mColVel, 0.9);
+
+    if (vec2LengthSqr(self.mColVel) < 0.01) {
+      self.mColVel.x = 0;
+      self.mColVel.y = 0;
+    }
+
+    collisionSyncColliders(self);
+    trackFindPointInTrack(Game.mTrack, self.mPos, -1, 0, self.mTrackPoints);
+  } else {
+    collisionSyncColliders(self);
+    trackFindPointInTrack(Game.mTrack, self.mPos, self.mTrackPoints[-1]?.mSegmentIdx ?? -1, -1, self.mTrackPoints);
+  }
 
   if (prevMainSegmentIdx === 0 && self.mTrackPoints[-1]?.mSegmentIdx === Game.mTrack.segments.length - 1) {
     self.mLapTracker -= 1;
@@ -288,7 +300,7 @@ export const racerFixedTick = (self: Racer, delta: number) => {
 
         const den = (moveVecX * startNormal.y) - (moveVecY * startNormal.x);
         let crossingRatio = 1;
-        if (mathJs.abs(den) > kMathEpsilon) {
+        if (mathAbs(den) > kMathEpsilon) {
           const num = (spToPrevX * startNormal.y) - (spToPrevY * startNormal.x);
           crossingRatio = mathClamp(num / den, 0, 1);
         }
@@ -353,13 +365,13 @@ export const racerTick = (self: Racer, delta: number) => {
   
   if (speedSqr > sprintAnimThreshold) {
     self.mAnimIdx = 3;
-    self.mAnimSpeed = mathLerp(0.8, 2, mathJs.min(1, speedSqr / gallopMaxSpeedSqr));
+    self.mAnimSpeed = mathLerp(0.8, 2, mathMin(1, speedSqr / gallopMaxSpeedSqr));
   } else if (speedSqr > 0) {
     self.mAnimIdx = 2;
     self.mAnimSpeed = mathLerp(0.1, 1.5, speedSqr / sprintAnimThreshold);
   } else {
     self.mAnimIdx = 1;
-    self.mAnimSpeed = mathLerp(0.4, 1, mathJs.random());
+    self.mAnimSpeed = mathLerp(0.4, 1, mathRandom());
   }
 
   // if (Game.mRacers[0] === self) {
@@ -375,7 +387,7 @@ export const racerRender = (
   x: number, y: number, invZ: number,
   angle: number, scale: number, alpha: number
 ) => {
-  const dir = (mathJs.abs(angle) < kMathHalfPi) ? 1 : -1;
+  const dir = (mathAbs(angle) < kMathHalfPi) ? 1 : -1;
 
   const getAnimatedAngle = (partId: number) =>{
     const anim = racerAnimations[self.mAnimIdx];
@@ -391,7 +403,7 @@ export const racerRender = (
     let workIdx = 1;
     let totalDuration = 0;
     while(workIdx < partAnimLen) {
-      totalDuration += mathJs.max(0, partAnim[workIdx] as number);
+      totalDuration += mathMax(0, partAnim[workIdx] as number);
       workIdx += 3;
     }
   
@@ -403,7 +415,7 @@ export const racerRender = (
     let elapsed = 0;
   
     for (workIdx = 0; workIdx < partAnimLen; workIdx += 3) {
-      const segmentDuration = mathJs.max(0, partAnim[workIdx + 1] as number);
+      const segmentDuration = mathMax(0, partAnim[workIdx + 1] as number);
       if (segmentDuration === 0) {
         continue;
       }
@@ -449,7 +461,7 @@ export const racerRender = (
   const applyRotationTransform = (
     [x, y]: [number, number], z: number,
   ) => {
-    const smoothSignX = x / mathJs.sqrt((x * x) + 0.25);
+    const smoothSignX = x / mathSqrt((x * x) + 0.25);
       
     // Pseudo-3D yaw: collapse x by cos, offset x by depth, and shift y by signed x.
     const transformedX = (x * rotCos) - (z * rotSin);
@@ -513,7 +525,7 @@ export const racerRender = (
         );
       }
 
-      const morphValue = mathJs.abs(mathClamp(rotSin, -1, 1));
+      const morphValue = mathAbs(mathClamp(rotSin, -1, 1));
       if (morphValue > 0 && shape[1]) {
         shapePoints.forEach((point, idx) => {
           const shapeIdx = idx * 2;
@@ -574,18 +586,18 @@ export const racerRender = (
         const [psx, psy] = toScreen(workTransformedNodes[parent].mPos);
         const dx = sx - psx;
         const dy = sy - psy;
-        const len = mathJs.hypot(dx, dy);
+        const len = mathHypot(dx, dy);
 
         const parentSkelNode = self.mSkeleton[parent];
         const parentRadius = parentSkelNode[3] * scale;
         if (len < kMathEpsilon) {
-          drawCircle(psx, psy, mathJs.max(radius, parentRadius), color);
+          drawCircle(psx, psy, mathMax(radius, parentRadius), color);
         }
 
         // Sweep circles along the segment with interpolated radius to create a smooth taper.
         const avgRadius = (parentRadius + radius) * 0.5;
-        const spacing = mathJs.max(0.75, avgRadius * 0.35);
-        const steps = mathJs.max(1, mathJs.ceil(len / spacing));
+        const spacing = mathMax(0.75, avgRadius * 0.35);
+        const steps = mathMax(1, mathCeil(len / spacing));
 
         for (let i = 0; i <= steps; ++i) {
           const t = i / steps;

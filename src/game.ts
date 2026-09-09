@@ -4,11 +4,12 @@ import { tracks } from "./data/track.data";
 import { cloudsGenerate } from "./game/clouds";
 import { racerFixedTick, racerNew, racerRender, racerSetAngleFromVector, racerSetupTrackPoints, racerTick, type Racer } from "./game/racer";
 import { Track, trackDrawTexture, trackGetStartPositions, trackLoadData } from "./game/track";
-import { mathJs, mathTan, vec2Add, vec2Copy, vec2MulScalar, vec2New } from "./math";
+import { mathCeil, mathJs, mathMin, mathTan, vec2Add, vec2Copy, vec2MulScalar, vec2New } from "./math";
 import { cameraFreeCamNew, cameraSetupFreeCamEvents, cameraHandleFreeCamInput, type FreeCamera, cameraGameCamNew, cameraGameCamTick, type GameCamera } from "./game/camera";
 import { kVerticalFov, type Camera } from "./core/camera";
 import { renderGameUI } from "./game/game-ui";
 import { controllerProcessPlayerInput, controllerSetupPlayerInput } from "./game/controllers";
+import { collisionActivateEntity } from "./game/collision";
 
 const kTargetTickTime = 1/120;
 
@@ -73,13 +74,13 @@ export const Game: Game = {
 }
 
 export const gameInit = () => {
-  trackLoadData(Game.mTrack, tracks[0]);
+  trackLoadData(Game.mTrack, tracks[5]);
   trackDrawTexture(Game.mTrack);
   cloudsGenerate();
   
   const racersCount = Game.mRacers.length;
   const startRows = 2;
-  const racersPerRow = mathJs.ceil(racersCount / startRows);
+  const racersPerRow = mathCeil(racersCount / startRows);
   const startPositions = trackGetStartPositions(Game.mTrack, startRows);
 
   for (let idx = 0; idx < startRows; ++idx) {
@@ -104,12 +105,14 @@ export const gameInit = () => {
       racerSetupTrackPoints(racer, pos);
 
       Game.mRenderRacerCmd.mRenderables.push(racer);
+      collisionActivateEntity(racer);
+
       widthFactor += racerDistance;
     }
   }
 
   (Game.mCamera as GameCamera).mTarget = Game.mRacers[0];
-  // Game.mRacers[0].mController.mProcessFunction = controllerProcessPlayerInput;
+  Game.mRacers[0].mController.mProcessFunction = controllerProcessPlayerInput;
 
   controllerSetupPlayerInput(Game.mRacers[0].mController);
 
@@ -132,7 +135,7 @@ function processDefault(self: Game, delta: number) {
 }
 
 function processWithFixed(self: Game, delta: number) {
-  self.mAccTime = mathJs.min(self.mAccTime + delta, 5);
+  self.mAccTime = mathMin(self.mAccTime + delta, 5);
   if (self.mAccTime > kTargetTickTime) {
     for (; self.mAccTime > 0; self.mAccTime -= kTargetTickTime) {
       for (const racer of self.mRacers) {

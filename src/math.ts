@@ -24,11 +24,31 @@ export const kMathPi = mathJs.PI;
 export const kMathHalfPi = mathJs.PI * 0.5;
 export const kMathTau = mathJs.PI * 2;
 
+export const mathRandom = () => mathJs.random();
+
+export const mathFloor = (x: number) => mathJs.floor(x);
+
+export const mathCeil = (x: number) => mathJs.ceil(x);
+
+export const mathMax = (a: number, b: number) => mathJs.max(a, b);
+
+export const mathMin = (a: number, b: number) => mathJs.min(a, b);
+
+export const mathAbs = (x: number) => mathJs.abs(x);
+
+export const mathPow = (x: number, y: number) => mathJs.pow(x, y);
+
+export const mathSqrt = (x: number) => mathJs.sqrt(x);
+
 export const mathSin = (x: number) => mathJs.sin(x);
 
 export const mathCos = (x: number) => mathJs.cos(x);
 
 export const mathTan = (x: number) => mathJs.tan(x);
+
+export const mathAtan2 = (y: number, x: number) => mathJs.atan2(y, x);
+
+export const mathHypot = (x: number, y: number) => mathJs.hypot(x, y);
 
 export const mathMod = (a: number, b: number) => ((a % b) + b) % b;
 
@@ -42,7 +62,7 @@ export const mathLerpAngle = (a: number, b: number, ratio: number) => {
 };
 
 export const mathSmoothstep = (x: number) => {
-  const t = mathJs.max(0, mathJs.min(1, x));
+  const t = mathMax(0, mathMin(1, x));
   return t * t * (3 - (2 * t));
 };
 
@@ -105,7 +125,7 @@ export const vec2Dot = (v1: Vec2, v2: Vec2) => v1.x * v2.x + v1.y * v2.y;
 
 export const vec2LengthSqr = (v: Vec2) => vec2Dot(v, v);
 
-export const vec2Length = (v: Vec2) => mathJs.sqrt(vec2Dot(v, v));
+export const vec2Length = (v: Vec2) => mathSqrt(vec2Dot(v, v));
 
 export const vec2Normalize = (self: Vec2) => {
   const len = vec2Length(self);
@@ -121,7 +141,7 @@ export const vec2Normalize = (self: Vec2) => {
   return self;
 };
 
-export const vec2Angle = (v: Vec2) => mathJs.atan2(v.y, v.x);
+export const vec2Angle = (v: Vec2) => mathAtan2(v.y, v.x);
 
 export const vec2Rotate = (self: Vec2, angle: number) => {
   const cos = mathCos(angle);
@@ -141,7 +161,7 @@ export const vec2DistanceSqr = (v1: Vec2, v2: Vec2) => {
   return dx * dx + dy * dy;
 };
 
-export const vec2Distance = (v1: Vec2, v2: Vec2) => mathJs.sqrt(vec2DistanceSqr(v1, v2));
+export const vec2Distance = (v1: Vec2, v2: Vec2) => mathSqrt(vec2DistanceSqr(v1, v2));
 
 export const vec2Lerp = (self: Vec2, v: Vec2, ratio: number) => (
   self.x = mathLerp(self.x, v.x, ratio),
@@ -174,9 +194,9 @@ export const splineCalculateCatmullRom = (points: SplinePoint[], alpha: number, 
     const p2 = points[idx + 2];
     const p3 = points[idx + 3];
     const tension = p1.tension;
-    const t01 = mathJs.max(mathJs.pow(vec2Distance(p0, p1), alpha), kMathEpsilon);
-    const t12 = mathJs.max(mathJs.pow(vec2Distance(p1, p2), alpha), kMathEpsilon);
-    const t23 = mathJs.max(mathJs.pow(vec2Distance(p2, p3), alpha), kMathEpsilon);
+    const t01 = mathMax(mathPow(vec2Distance(p0, p1), alpha), kMathEpsilon);
+    const t12 = mathMax(mathPow(vec2Distance(p1, p2), alpha), kMathEpsilon);
+    const t23 = mathMax(mathPow(vec2Distance(p2, p3), alpha), kMathEpsilon);
 
     const dp10 = vec2Sub(vec2NewCopy(p1), p0);
     const dp20 = vec2Sub(vec2NewCopy(p2), p0);

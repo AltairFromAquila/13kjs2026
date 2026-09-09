@@ -1,14 +1,13 @@
 import { easeInOutQuad, easeInOutSine, easeInQuad, easeInSine, easeOutQuad, easeOutSine } from "../easing";
 import { cloudsGetPixels } from "../game/clouds";
-import { racerRender } from "../game/racer";
-import { kMathEpsilon, kMathHalfPi, kMathPi, kMathTau, mathClamp, mathCos, mathJs, mathMod, mathSin, mathTan, type Vec2, } from "../math";
+import { kMathEpsilon, kMathHalfPi, kMathPi, kMathTau, mathAbs, mathAtan2, mathCeil, mathClamp, mathCos, mathHypot, mathJs, mathMax, mathMin, mathMod, mathSin, mathSqrt, mathTan, type Vec2, } from "../math";
 import type { Camera } from "../core/camera";
 import { kVerticalFov } from "../core/camera";
 import { canvas, createOffscreenCanvas, ctx } from "../sys/context";
+import type { Entity } from "./entity";
 
-export interface Renderable {
-  mPos: Vec2;
-  mAngle: number;
+export interface Renderable extends Entity {
+  mScreenPos: Vec2;
 }
 
 export interface RenderableCommand<R extends Renderable> {
@@ -1134,17 +1133,17 @@ function renderRacer() {
   ) {
     const dx = bx - ax;
     const dy = by - ay;
-    const len = mathJs.hypot(dx, dy);
+    const len = mathHypot(dx, dy);
 
     if (len < 1e-6) {
-      drawCircle(ax, ay, mathJs.max(ar, br), color);
+      drawCircle(ax, ay, mathMax(ar, br), color);
       return;
     }
 
     // Sweep circles along the segment with interpolated radius to create a smooth taper.
     const avgRadius = (ar + br) * 0.5;
-    const spacing = mathJs.max(0.75, avgRadius * 0.35);
-    const steps = mathJs.max(1, mathJs.ceil(len / spacing));
+    const spacing = mathMax(0.75, avgRadius * 0.35);
+    const steps = mathMax(1, mathCeil(len / spacing));
 
     for (let i = 0; i <= steps; ++i) {
       const t = i / steps;
@@ -1232,7 +1231,7 @@ function renderRacer() {
 
       let totalDuration = 0;
       for (const keyframe of partAnim) {
-        totalDuration += mathJs.max(0, keyframe.duration);
+        totalDuration += mathMax(0, keyframe.duration);
       }
 
       if (totalDuration <= 0) {
@@ -1245,7 +1244,7 @@ function renderRacer() {
       for (let i = 0; i < partAnim.length; ++i) {
         const current = partAnim[i];
         const next = partAnim[(i + 1) % partAnim.length];
-        const segmentDuration = mathJs.max(0, current.duration);
+        const segmentDuration = mathMax(0, current.duration);
 
         if (segmentDuration === 0) {
           continue;
@@ -1287,7 +1286,7 @@ function renderRacer() {
       const animated = applyAnimationTransform(x, y);
       const animX = animated.x;
       const animY = animated.y;
-      const smoothSignX = animX / mathJs.sqrt((animX * animX) + 0.25);
+      const smoothSignX = animX / mathSqrt((animX * animX) + 0.25);
       
       // Pseudo-3D yaw: collapse x by cos, offset x by depth, and shift y by signed x.
       const transformedX = (animX * rotCos) - (z * rotSin);
@@ -1338,9 +1337,9 @@ function renderRacer() {
       let transformedPoints = defaultPoints;
       let transformedShapeZ = transformedShapeOrigin.z;
 
-      const morphValue = mathJs.max(-1, mathJs.min(1, rotSin));
+      const morphValue = mathMax(-1, mathMin(1, rotSin));
       const target = (morphValue >= 0) ? shape.back : shape.front;
-      const morphAmount = mathJs.abs(morphValue);
+      const morphAmount = mathAbs(morphValue);
 
       if (target && target.points.length === shape.points.length && morphAmount > 0) {
         const targetOrigin = applyYawTransform(node.pos[0], node.pos[1], node.z);
@@ -1477,10 +1476,12 @@ function renderRenderables<R extends Renderable>(camera: Camera, renderableCmd: 
     const x = (ndcX * halfWidth) + halfWidth - 0.5;
     const y = halfHeight - (ndcY * halfHeight) - 0.5;
 
+    renderable.mScreenPos.x = x;
+    renderable.mScreenPos.y = y;
+
     const invZ = 1 / safeZ;
-    const camFromRacerAngle = mathJs.atan2(-dy, -dx);
+    const camFromRacerAngle = mathAtan2(-dy, -dx);
     const relAngle = renderable.mAngle - camFromRacerAngle - kMathHalfPi;
-    // const angle = mathJs.atan2(mathSin(relAngle), mathCos(relAngle));
     const angle = mathMod((relAngle + kMathPi), kMathTau) - kMathPi;
     const focalY = halfHeight / tanHalfVFov;
     const scale = renderableCmd.mScale * focalY * invZ;
@@ -1493,7 +1494,7 @@ function renderRenderables<R extends Renderable>(camera: Camera, renderableCmd: 
       continue;
     }
 
-    const groundDistance = mathJs.hypot(dx, dy);
+    const groundDistance = mathHypot(dx, dy);
     const groundInvZ = groundDistance / camera.mHeight;
     const linearFogValue = mathClamp((groundInvZ * kFogFactor) - 1, 0, 1);
     const fogAlpha = 1 - easeOutQuad(linearFogValue);

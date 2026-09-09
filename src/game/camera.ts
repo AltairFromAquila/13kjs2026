@@ -1,5 +1,5 @@
 import { kVerticalFov, type Camera } from "../core/camera";
-import { mathJs, mathSin, mathCos, type Vec2, kMathTau, mathMod, vec2New, kMathHalfPi, mathLerp, mathLerpAngle } from "../math";
+import { mathJs, mathSin, mathCos, type Vec2, kMathTau, mathMod, vec2New, kMathHalfPi, mathLerp, mathLerpAngle, mathMax, mathMin, mathClamp } from "../math";
 
 export interface GameCamera extends Camera {
   mAngleOffset: number;
@@ -202,9 +202,9 @@ export const cameraHandleFreeCamInput = (self: FreeCamera, delta: number) => {
   if (self.mPitchNegative) self.mPitch -= pitchDelta;
   if (self.mPitchPositive) self.mPitch += pitchDelta;
 
-  self.mHeight = mathJs.max(kFreeCamMinHeight, self.mHeight);
+  self.mHeight = mathMax(kFreeCamMinHeight, self.mHeight);
   self.mAngle = mathMod(self.mAngle, kMathTau);
-  self.mPitch = mathJs.max(-kFreePitchMaxAbs, mathJs.min(kFreePitchMaxAbs, self.mPitch));
+  self.mPitch = mathClamp(self.mPitch, -kFreePitchMaxAbs, kFreePitchMaxAbs);
 
   self.mLogTime += delta;
   if (self.mLogTime > 5) {

@@ -1,5 +1,5 @@
 import { Game } from "../game";
-import { kMathEpsilon, mathClamp, mathCos, mathJs, mathLerpAngle, mathSin, splineCalculateSegmentPoint, splineCalculateSegmentTangent, vec2Add, vec2Copy, vec2Distance, vec2DistanceSqr, vec2Dot, vec2LengthSqr, vec2Lerp, vec2MulScalar, vec2New, vec2NewCopy, vec2Normalize, vec2Sub, type Vec2 } from "../math";
+import { kMathEpsilon, mathAbs, mathAtan2, mathClamp, mathCos, mathJs, mathLerpAngle, mathMax, mathMin, mathRandom, mathSin, splineCalculateSegmentPoint, splineCalculateSegmentTangent, vec2Add, vec2Copy, vec2Distance, vec2DistanceSqr, vec2Dot, vec2LengthSqr, vec2Lerp, vec2MulScalar, vec2New, vec2NewCopy, vec2Normalize, vec2Sub, type Vec2 } from "../math";
 import { windowAddEventListener, windowRemoveEventListener } from "../sys/window";
 import type { Racer } from "./racer";
 import { trackGetTrackWidthAt, trackWrapSegmentIndex } from "./track";
@@ -97,8 +97,8 @@ const controllerTranslatePlayerDirection = (x: number, y: number, racer: Racer, 
     const speedRatio = mathClamp(speedSqr / steeringCompressionSqr, 0, 1);
     const turnScale = 1 - ((1 - kPlayerSteeringMinTurnScale) * speedRatio);
 
-    const velocityAngle = mathJs.atan2(racer.mVel.y, racer.mVel.x);
-    const desiredAngle = mathJs.atan2(outVec.y, outVec.x);
+    const velocityAngle = mathAtan2(racer.mVel.y, racer.mVel.x);
+    const desiredAngle = mathAtan2(outVec.y, outVec.x);
     const blendedAngle = mathLerpAngle(velocityAngle, desiredAngle, turnScale);
 
     outVec.x = mathCos(blendedAngle);
@@ -337,7 +337,7 @@ export const controllerProcessAIForRacer = (self: Controller, racer: Racer, delt
       }
 
       if (self.mIsGalloping) {
-        self.mGallopTapPressed = !wasGalloping || mathJs.random() < 0.5;
+        self.mGallopTapPressed = !wasGalloping || mathRandom() < 0.5;
       }
     }
 
@@ -363,12 +363,12 @@ export const controllerProcessAIForRacer = (self: Controller, racer: Racer, delt
     if (
       playerDistanceSqr < (isPlayerAhead ? 240 * 240 : 64 * 64) &&
       playerDistanceSqr > (32 * 32) &&
-      mathJs.random() < kAIBlockPlayerChance
+      mathRandom() < kAIBlockPlayerChance
     ) {
-      self.mIsBlockingPlayer = mathJs.random() < kAIBlockPlayerChance;
+      self.mIsBlockingPlayer = mathRandom() < kAIBlockPlayerChance;
     }
 
-    self.mBlockPlayerTimer = 1 + (mathJs.random() * 4);
+    self.mBlockPlayerTimer = 1 + (mathRandom() * 4);
   }
 
   if (self.mWasStuck) {
@@ -404,7 +404,7 @@ export const controllerProcessAIForRacer = (self: Controller, racer: Racer, delt
     }
   } else {
     // Calculate desired direction based on a delta between future track point and current track point
-    const deltaT = mathJs.max(trackPoint.t - self.mPreviousSegmentT, 0.06);
+    const deltaT = mathMax(trackPoint.t - self.mPreviousSegmentT, 0.06);
     let nextT = trackPoint.t + (deltaT * 2); // Look ahead twice the current deltaT
     let nextTSegmentIdx = trackPoint.mSegmentIdx;
 
@@ -416,7 +416,7 @@ export const controllerProcessAIForRacer = (self: Controller, racer: Racer, delt
         splineCalculateSegmentPoint(Game.mTrack.segments[nextSegment], 1, vec2New())
       ) || kMathEpsilon;
 
-      nextT = mathJs.min(92 / nextSegmentLength, 1); // 92 is the distance we want to look ahead, we divide by the segment length to get the t value
+      nextT = mathMin(92 / nextSegmentLength, 1); // 92 is the distance we want to look ahead, we divide by the segment length to get the t value
       nextTSegmentIdx = nextSegment;
     }
     const nextPos = splineCalculateSegmentPoint(Game.mTrack.segments[nextTSegmentIdx], nextT, vec2New());
@@ -444,8 +444,8 @@ export const controllerProcessAIForRacer = (self: Controller, racer: Racer, delt
     }
 
     if (
-      mathJs.abs(curUsedHalfWidth) > (curTrackHalfWidth * trackSafeWidthFactor) ||
-      (self.mIsBlockingPlayer && mathJs.abs(playerWidthRatio) > trackSafeWidthFactor) ||
+      mathAbs(curUsedHalfWidth) > (curTrackHalfWidth * trackSafeWidthFactor) ||
+      (self.mIsBlockingPlayer && mathAbs(playerWidthRatio) > trackSafeWidthFactor) ||
       curTrackHalfWidth <= kMathEpsilon
     ) {
       // If we are too close to the edge, we want to steer towards the center of the track
@@ -460,7 +460,7 @@ export const controllerProcessAIForRacer = (self: Controller, racer: Racer, delt
       const targetWidthRatio = mathClamp(
         self.mIsBlockingPlayer
           ? playerWidthRatio
-          : (curUsedHalfWidth / curTrackHalfWidth) + (mathJs.random() * 0.5) - 0.25,
+          : (curUsedHalfWidth / curTrackHalfWidth) + (mathRandom() * 0.5) - 0.25,
         -trackSafeWidthFactor, trackSafeWidthFactor
       );
 
@@ -495,12 +495,12 @@ export const controllerProcessAIForRacer = (self: Controller, racer: Racer, delt
       vec2Lerp(
         self.mDesiredDirection,
         vec2MulScalar(velDir, -1),
-        mathJs.min(velAlignmentRatio * 1.5, 1)
+        mathMin(velAlignmentRatio * 1.5, 1)
       );
     }
   }
 
   self.mPreviousSegmentIdx = trackPoint.mSegmentIdx;
   self.mPreviousSegmentT = trackPoint.t;
-  self.mReactionTimer += kAIReactionTimeMin + mathJs.random() * kAIReactionTimeMaxDelta;
+  self.mReactionTimer += kAIReactionTimeMin + mathRandom() * kAIReactionTimeMaxDelta;
 };

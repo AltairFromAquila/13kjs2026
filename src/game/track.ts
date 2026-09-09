@@ -1,5 +1,5 @@
 import type { TrackRawData } from "../data/track.data";
-import { splineCalculateCatmullRom, splineCalculateSegmentPoint, splineCalculateSegmentTangent, mathLerp, mathJs, vec2Add, vec2Dot, vec2MulScalar, vec2New, vec2NewCopy, vec2Normalize, vec2Sub, type SplinePoint, type SplineSegment, type Vec2, mathMod, vec2Copy, vec2LengthSqr } from "../math";
+import { splineCalculateCatmullRom, splineCalculateSegmentPoint, splineCalculateSegmentTangent, mathLerp, mathJs, vec2Add, vec2Dot, vec2MulScalar, vec2New, vec2NewCopy, vec2Normalize, vec2Sub, type SplinePoint, type SplineSegment, type Vec2, mathMod, vec2Copy, vec2LengthSqr, mathAbs, mathMax, mathSqrt } from "../math";
 
 interface TrackData {
   mainPath: SplinePoint[];
@@ -337,7 +337,7 @@ export const trackGetStartPositions = (self: Track, rows: number): TrackPointPro
       
       const dx = cur.x - prev.x;
       const dy = cur.y - prev.y;
-      length += mathJs.sqrt(dx * dx + dy * dy);
+      length += mathSqrt(dx * dx + dy * dy);
 
       if (length >= targetDistance) return targetDistance;
 
@@ -366,7 +366,7 @@ export const trackGetStartPositions = (self: Track, rows: number): TrackPointPro
 
       if (available + eps >= remaining) {
         const tCurrent = t;
-        const targetFromEnd = mathJs.max(0, remaining);
+        const targetFromEnd = mathMax(0, remaining);
         let left = 0;
         let right = tCurrent;
 
@@ -489,7 +489,7 @@ export const trackFindPointInTrack = (
     const toPos = vec2Sub(vec2NewCopy(pos), trackPoint.mPos);
     const signedOffset = vec2Dot(toPos, normal);
 
-    trackPoint.mInside = mathJs.abs(signedOffset) <= (0.5 * trackPoint.mWidth) + 3;
+    trackPoint.mInside = mathAbs(signedOffset) <= (0.5 * trackPoint.mWidth) + 3;
     trackPoint.mDistSqr = vec2Dot(toPos, toPos);
     
     return trackPoint;
@@ -618,7 +618,7 @@ function projectPointToSegment(pathIdx: number, segmentIdx: number, segment: Spl
     mPos: point,
     mTangent: tangent,
     mWidth: width,
-    mInside: Math.abs(signedOffset) <= (0.5 * width) + 3,
+    mInside: mathAbs(signedOffset) <= (0.5 * width) + 3,
     mDistSqr: distSq,
   };
 }
