@@ -1,5 +1,6 @@
 import type { TrackRawData } from "../data/track.data";
 import { splineCalculateCatmullRom, splineCalculateSegmentPoint, splineCalculateSegmentTangent, mathLerp, mathJs, vec2Add, vec2Dot, vec2MulScalar, vec2New, vec2NewCopy, vec2Normalize, vec2Sub, type SplinePoint, type SplineSegment, type Vec2, mathMod, vec2Copy, vec2LengthSqr, mathAbs, mathMax, mathSqrt } from "../math";
+import { ctxBeginPath, ctxClosePathAndFill, ctxGetRainbowGradient, ctxLineTo, ctxMoveTo, ctxSetFillStyle } from "../sys/context";
 
 interface TrackData {
   mainPath: SplinePoint[];
@@ -201,7 +202,6 @@ export function trackDrawTexture(self: Track) {
   const ctx = self.textureCtx as OffscreenCanvasRenderingContext2D;
   const { width: canvasWidth, height: canvasHeight } = self.textureCanvas;
   ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-  // ctx.imageSmoothingEnabled = false;
 
   const samplesLen = samples.length;
   for (let i = 0; i < samplesLen; ++i) {
@@ -240,24 +240,16 @@ export function trackDrawTexture(self: Track) {
     const gradLeft = vec2Add(vec2MulScalar(vec2NewCopy(midNormal), midHalfWidth), midPos);
     const gradRight = vec2Add(vec2MulScalar(vec2NewCopy(midNormal), -midHalfWidth), midPos);
 
-    const gradient = ctx.createLinearGradient(gradLeft.x, gradLeft.y, gradRight.x, gradRight.y);
-    gradient.addColorStop(0.00, "#f008");
-    gradient.addColorStop(0.17, "#f808");
-    gradient.addColorStop(0.33, "#ff08");
-    gradient.addColorStop(0.50, "#0f08");
-    gradient.addColorStop(0.67, "#00f8");
-    gradient.addColorStop(0.83, "#4088");
-    gradient.addColorStop(1.00, "#80f8");
+    const gradient = ctxGetRainbowGradient(ctx, gradLeft.x, gradLeft.y, gradRight.x, gradRight.y, '8');
 
-    ctx.fillStyle = gradient;
+    ctxSetFillStyle(ctx, gradient);
     ctx.strokeStyle = gradient;
-    ctx.beginPath();
-    ctx.moveTo(curLeft.x, curLeft.y);
-    ctx.lineTo(nextLeft.x, nextLeft.y);
-    ctx.lineTo(nextRight.x, nextRight.y);
-    ctx.lineTo(curRight.x, curRight.y);
-    ctx.closePath();
-    ctx.fill();
+    ctxBeginPath(ctx);
+    ctxMoveTo(ctx, curLeft.x, curLeft.y);
+    ctxLineTo(ctx, nextLeft.x, nextLeft.y);
+    ctxLineTo(ctx, nextRight.x, nextRight.y);
+    ctxLineTo(ctx, curRight.x, curRight.y);
+    ctxClosePathAndFill(ctx);
     ctx.stroke();
   }
 
@@ -299,14 +291,13 @@ export function trackDrawTexture(self: Track) {
         vec2MulScalar(vec2NewCopy(startTan), t1)
       );
 
-      ctx.fillStyle = ((x + y) & 1) ? "#000" : "#fff";
-      ctx.beginPath();
-      ctx.moveTo(p0.x, p0.y);
-      ctx.lineTo(p1.x, p1.y);
-      ctx.lineTo(p2.x, p2.y);
-      ctx.lineTo(p3.x, p3.y);
-      ctx.closePath();
-      ctx.fill();
+      ctx.fillStyle = ((x + y) & 1) ? '#000' : '#fff';
+      ctxBeginPath(ctx);
+      ctxMoveTo(ctx, p0.x, p0.y);
+      ctxLineTo(ctx, p1.x, p1.y);
+      ctxLineTo(ctx, p2.x, p2.y);
+      ctxLineTo(ctx, p3.x, p3.y);
+      ctxClosePathAndFill(ctx);
     }
   }
 }
@@ -568,97 +559,4 @@ function getDistanceSqrAt(segment: SplineSegment, t: number, pos: Vec2) {
   const point = splineCalculateSegmentPoint(segment, t, vec2New());
   const diff = vec2Sub(vec2NewCopy(pos), point);
   return vec2Dot(diff, diff);
-}
-
-function projectPointToSegment(pathIdx: number, segmentIdx: number, segment: SplineSegment, pos: Vec2): (TrackPointProjection) {
-  const samples = 8;
-  let bestT = 0;
-  let bestDistSq = Infinity;
-
-  for (let i = 0; i <= samples; ++i) {
-    const t = i / samples;
-    const distSq = getDistanceSqrAt(segment, t, pos);
-    if (distSq < bestDistSq) {
-      bestDistSq = distSq;
-      bestT = t;
-    }
-  }
-
-  const coarseStep = 1 / samples;
-  let left = (bestT > coarseStep) ? bestT - coarseStep : 0;
-  let right = (bestT < 1 - coarseStep) ? bestT + coarseStep : 1;
-
-  for (let i = 0; i < 14; ++i) {
-    const t1 = (2 * left + right) / 3;
-    const t2 = (left + 2 * right) / 3;
-
-    const dist1 = getDistanceSqrAt(segment, t1, pos);
-    const dist2 = getDistanceSqrAt(segment, t2, pos);
-
-    if (dist1 <= dist2) {
-      right = t2;
-    } else {
-      left = t1;
-    }
-  }
-
-  const t = 0.5 * (left + right);
-  const point = splineCalculateSegmentPoint(segment, t, vec2New());
-  const tangent = splineCalculateSegmentTangent(segment, t, vec2New());
-  const normal = vec2New(-tangent.y, tangent.x);
-  const toPos = vec2Sub(vec2NewCopy(pos), point);
-  const signedOffset = vec2Dot(toPos, normal);
-  const width = mathLerp(segment.w0, segment.w1, t);
-  const distSq = vec2Dot(toPos, toPos);
-
-  return {
-    mPathIdx: pathIdx,
-    mSegmentIdx: segmentIdx,
-    t,
-    mPos: point,
-    mTangent: tangent,
-    mWidth: width,
-    mInside: mathAbs(signedOffset) <= (0.5 * width) + 3,
-    mDistSqr: distSq,
-  };
-}
-
-function findClosestOnPath(self: Track, pathIdx: number, pos: Vec2, hintSegmentIdx: number, fast = false): (TrackPointProjection) | null {
-  const segments = (pathIdx === -1)
-    ? self.segments
-    : self.secondaryPaths[pathIdx]?.segments;
-
-  if (!segments || segments.length === 0) return null;
-
-  const segmentCount = segments.length;
-  const uniqueCandidates = new Set<number>();
-  const candidateIndices: number[] = [];
-
-  const hinted = [hintSegmentIdx - 2, hintSegmentIdx - 1, hintSegmentIdx, hintSegmentIdx + 1, hintSegmentIdx + 2];
-  for (const idx of hinted) {
-    const wrapped = trackWrapSegmentIndex(idx, segmentCount);
-    if (!uniqueCandidates.has(wrapped)) {
-      uniqueCandidates.add(wrapped);
-      candidateIndices.push(wrapped);
-    }
-  }
-
-  if (!fast) {
-    for (let i = 0; i < segmentCount; ++i) {
-      if (!uniqueCandidates.has(i)) {
-        uniqueCandidates.add(i);
-        candidateIndices.push(i);
-      }
-    }
-  }
-
-  let best: (TrackPointProjection) | null = null;
-  for (const idx of candidateIndices) {
-    const candidate = projectPointToSegment(pathIdx, idx, segments[idx], pos);
-    if (!best || candidate.mDistSqr < best.mDistSqr) {
-      best = candidate;
-    }
-  }
-
-  return best;
 }

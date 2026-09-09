@@ -1,6 +1,6 @@
 import { Game } from "../game";
 import { mathFloor, vec2Length } from "../math";
-import { ctx, ctxBeginPath, ctxLineTo, ctxMoveTo } from "../sys/context";
+import { ctx, ctxBeginPath, ctxFillText, ctxGetRainbowGradient, ctxLineTo, ctxMoveTo, ctxSetFillStyle, ctxSetTextAlign } from "../sys/context";
 
 let textHue = 44;
 let lastLapTimer = 0;
@@ -10,6 +10,10 @@ let showingGap = false;
 let gapTimeText = '';
 let gapTimeColor = '#7f7';
 let gapTimer = -1;
+
+const gameUISetFont = (ctx: CanvasRenderingContext2D, fontSize: number) => {
+  ctx.font = `bold ${fontSize}px Georgia, Verdana, sans-serif`;
+}
 
 export const renderGameUI = (delta: number) => {
   const width = ctx.canvas.width;
@@ -45,8 +49,6 @@ export const renderGameUI = (delta: number) => {
 
   const scale = (height > 720) ? 1.5 : 1;
 
-  const fontFamily = 'Georgia, Verdana, sans-serif';
-
   textHue = (textHue + delta * 10) % 360;
 
   ctx.save();
@@ -58,11 +60,11 @@ export const renderGameUI = (delta: number) => {
   ctx.shadowOffsetX = 1;
   ctx.shadowOffsetY = 1;
 
-  ctx.font = `bold ${(8 * scale) | 0}px ${fontFamily}`;
-  ctx.fillStyle = '#fff';
+  gameUISetFont(ctx, 8 * scale);
+  ctxSetFillStyle(ctx, '#fff');
 
-  ctx.fillText('POSITION', (20 * scale), (20 * scale));
-  ctx.fillText('LAP', (120 * scale), (20 * scale));
+  ctxFillText(ctx, 'POSITION', (20 * scale), (20 * scale));
+  ctxFillText(ctx, 'LAP', (120 * scale), (20 * scale));
 
   let playerPosColor: string;
   let playerPosSufix: string;
@@ -81,27 +83,27 @@ export const renderGameUI = (delta: number) => {
     playerPosSufix = 'th';
   }
 
-  ctx.font = `bold ${(64 * scale) | 0}px ${fontFamily}`;
-  ctx.textAlign = 'right';
-  ctx.fillStyle = playerPosColor;
-  ctx.fillText(`${playerPosition}`, (60 * scale), (70 * scale));
+  gameUISetFont(ctx, 64 * scale);
+  ctxSetTextAlign(ctx, 'right');
+  ctxSetFillStyle(ctx, playerPosColor);
+  ctxFillText(ctx, `${playerPosition}`, (60 * scale), (70 * scale));
 
-  ctx.font = `bold ${(32 * scale) | 0}px ${fontFamily}`;
-  ctx.textAlign = 'left';
-  ctx.fillText(playerPosSufix, (62 * scale), (48 * scale));
+  gameUISetFont(ctx, 32 * scale);
+  ctxSetTextAlign(ctx, 'left');
+  ctxFillText(ctx, playerPosSufix, (62 * scale), (48 * scale));
 
-  ctx.font = `bold ${(18 * scale) | 0}px ${fontFamily}`;
-  ctx.fillStyle = '#fff';
-  ctx.fillText('/ 8', (64 * scale), (68 * scale));
-  ctx.fillText(`${Game.mRacers[0].mLap || 1}`, (120 * scale), (42 * scale));
-  ctx.fillText('/ 3', (136 * scale), (42 * scale));
+  gameUISetFont(ctx, 18 * scale);
+  ctxSetFillStyle(ctx, '#fff');
+  ctxFillText(ctx, '/ 8', (64 * scale), (68 * scale));
+  ctxFillText(ctx, `${Game.mRacers[0].mLap || 1}`, (120 * scale), (42 * scale));
+  ctxFillText(ctx, '/ 3', (136 * scale), (42 * scale));
 
-  ctx.font = `bold ${(12 * scale) | 0}px ${fontFamily}`;
-  ctx.textAlign = 'right';
+  gameUISetFont(ctx, 12 * scale);
+  ctxSetTextAlign(ctx, 'right');
 
-  ctx.fillText('STAMINA', width - (142 * scale), (30 * scale));
-  ctx.fillText('SPEED', width - (142 * scale), (64 * scale));
-  ctx.fillText('km/h', width - (20 * scale), (64 * scale));
+  ctxFillText(ctx, 'STAMINA', width - (142 * scale), (30 * scale));
+  ctxFillText(ctx, 'SPEED', width - (142 * scale), (64 * scale));
+  ctxFillText(ctx, 'km/h', width - (20 * scale), (64 * scale));
 
   ctxBeginPath(ctx);
   ctxMoveTo(ctx, width - (204 * scale), (35 * scale));
@@ -113,30 +115,23 @@ export const renderGameUI = (delta: number) => {
   ctxLineTo(ctx, width - (20 * scale), (69 * scale));
   ctx.stroke();
 
-  const rainbowGradient = ctx.createLinearGradient(width - (136 * scale), 0, width - (20 * scale), 0);
-  rainbowGradient.addColorStop(0.00, '#f00c');
-  rainbowGradient.addColorStop(0.17, '#f80c');
-  rainbowGradient.addColorStop(0.33, '#ff0c');
-  rainbowGradient.addColorStop(0.50, '#0f0c');
-  rainbowGradient.addColorStop(0.67, '#00fc');
-  rainbowGradient.addColorStop(0.83, '#408c');
-  rainbowGradient.addColorStop(1.00, '#80fc');
-  ctx.fillStyle = rainbowGradient;
+  const rainbowGradient = ctxGetRainbowGradient(ctx, width - (136 * scale), 0, width - (20 * scale), 0, 'c');
+  ctxSetFillStyle(ctx, rainbowGradient);
   ctx.fillRect(width - (134 * scale), (20 * scale), (112 * scale) * Game.mRacers[0].mStamina, (13 * scale));  
 
-  ctx.font = `bold ${(32 * scale) | 0}px ${fontFamily}`;
-  ctx.fillStyle = `hsl(${textHue}, 100%, 85%)`;
+  gameUISetFont(ctx, 32 * scale);
+  ctxSetFillStyle(ctx, `hsl(${textHue}, 100%, 85%)`);
 
-  ctx.fillText(speed.toFixed(0), width - (64 * scale), (64 * scale));
+  ctxFillText(ctx, speed.toFixed(0), width - (64 * scale), (64 * scale));
 
-  ctx.font = `bold ${(8 * scale) | 0}px ${fontFamily}`;
-  ctx.fillStyle = '#fff';
+  gameUISetFont(ctx, 8 * scale);
+  ctxSetFillStyle(ctx, '#fff');
 
-  ctx.fillText('TOTAL TIME', width - (142 * scale), (90 * scale));
-  ctx.fillText('LAP TIME', width - (142 * scale), (110 * scale));
-  ctx.fillText('BEST LAP', width - (142 * scale), (130 * scale));
+  ctxFillText(ctx, 'TOTAL TIME', width - (142 * scale), (90 * scale));
+  ctxFillText(ctx, 'LAP TIME', width - (142 * scale), (110 * scale));
+  ctxFillText(ctx, 'BEST LAP', width - (142 * scale), (130 * scale));
 
-  ctx.font = `bold ${(18 * scale) | 0}px ${fontFamily}`;
+  gameUISetFont(ctx, 18 * scale);
 
   const drawTimeElement = (time: number, y: number, scale: number) => {
     const seconds = time | 0;
@@ -144,18 +139,18 @@ export const renderGameUI = (delta: number) => {
     const minutes = mathFloor(seconds / 60);
     const remainingSeconds = seconds % 60;
 
-    ctx.textAlign = 'left';
-    ctx.fillText(`${milliseconds.toString().padStart(3, '0')}`, width - (56 * scale), (y * scale));
-    ctx.textAlign = 'right';
-    ctx.fillText(`${remainingSeconds.toString().padStart(2, '0')}.`, width - (57 * scale), (y * scale));
-    ctx.fillText(`${minutes.toString().padStart(2, '0')}:`, width - (87 * scale), (y * scale));
+    ctxSetTextAlign(ctx, 'left');
+    ctxFillText(ctx, `${milliseconds.toString().padStart(3, '0')}`, width - (56 * scale), (y * scale));
+    ctxSetTextAlign(ctx, 'right');
+    ctxFillText(ctx, `${remainingSeconds.toString().padStart(2, '0')}.`, width - (57 * scale), (y * scale));
+    ctxFillText(ctx, `${minutes.toString().padStart(2, '0')}:`, width - (87 * scale), (y * scale));
   };
   const drawNoTimeElement = (y: number, scale: number) => {
-    ctx.textAlign = 'left';
-    ctx.fillText('---', width - (56 * scale), (y * scale));
-    ctx.textAlign = 'right';
-    ctx.fillText('--.', width - (57 * scale), (y * scale));
-    ctx.fillText('--:', width - (87 * scale), (y * scale));
+    ctxSetTextAlign(ctx, 'left');
+    ctxFillText(ctx, '---', width - (56 * scale), (y * scale));
+    ctxSetTextAlign(ctx, 'right');
+    ctxFillText(ctx, '--.', width - (57 * scale), (y * scale));
+    ctxFillText(ctx, '--:', width - (87 * scale), (y * scale));
   };
 
   drawTimeElement(Game.mRacers[0].mTotalTime, 90, scale);
@@ -190,11 +185,11 @@ export const renderGameUI = (delta: number) => {
       lapColor = '#ff7';
     }
 
-    ctx.fillStyle = lapColor;
+    ctxSetFillStyle(ctx, lapColor);
     drawTimeElement(Game.mRacers[0].mLastLapTime, 110, scale);
   } else if (lastLapTimer > 0) {
     lastLapTimer -= delta;
-    ctx.fillStyle = lapColor;
+    ctxSetFillStyle(ctx, lapColor);
     drawTimeElement(Game.mRacers[0].mLastLapTime, 110, scale);
   } else {
     drawTimeElement(Game.mRacers[0].mLapTime, 110, scale);
@@ -241,14 +236,16 @@ export const renderGameUI = (delta: number) => {
         }
       }
     }
-    ctx.font = `bold ${(8 * scale) | 0}px ${fontFamily}`;
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#fff';
-    ctx.fillText('GAP', width / 2, 120 * scale);
 
-    ctx.font = `bold ${(18 * scale) | 0}px ${fontFamily}`;
-    ctx.fillStyle = gapTimeColor;
-    ctx.fillText(gapTimeText, (width / 2) - (3 * scale), 140 * scale);
+    
+    gameUISetFont(ctx, 8 * scale);
+    ctxSetTextAlign(ctx, 'center');
+    ctxSetFillStyle(ctx, '#fff');
+    ctxFillText(ctx, 'GAP', width / 2, 120 * scale);
+
+    gameUISetFont(ctx, 18 * scale);
+    ctxSetFillStyle(ctx, gapTimeColor);
+    ctxFillText(ctx, gapTimeText, (width / 2) - (3 * scale), 140 * scale);
   }
   
   ctx.restore();
