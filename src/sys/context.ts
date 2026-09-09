@@ -1,3 +1,5 @@
+type AnyCanvasRenderingContext2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+
 export const doc = document;
 
 export const canvas = doc.getElementById('c') as HTMLCanvasElement;
@@ -25,12 +27,31 @@ function getContext2D(canvas: HTMLCanvasElement, alpha: boolean, read: boolean) 
   return canvas.getContext('2d', { alpha, willReadFrequently: read });
 }
 
-export const ctxBeginPath = (ctx: CanvasRenderingContext2D) => ctx.beginPath();
-export const ctxClosePathAndFill = (ctx: CanvasRenderingContext2D) => (ctx.closePath(), ctx.fill());
-export const ctxMoveTo = (ctx: CanvasRenderingContext2D, x: number, y: number) => ctx.moveTo(x, y);
-export const ctxLineTo = (ctx: CanvasRenderingContext2D, x: number, y: number) => ctx.lineTo(x, y);
+export const ctxBeginPath = (ctx: AnyCanvasRenderingContext2D) => ctx.beginPath();
+export const ctxClosePathAndFill = (ctx: AnyCanvasRenderingContext2D) => (ctx.closePath(), ctx.fill());
 
-export const ctxSetFillStyle = (ctx: CanvasRenderingContext2D, color: string | CanvasGradient | CanvasPattern) => ctx.fillStyle = color;
+export const ctxSetTextAlign = (ctx: AnyCanvasRenderingContext2D, align: CanvasTextAlign) => ctx.textAlign = align;
+export const ctxFillText = (ctx: AnyCanvasRenderingContext2D, text: string, x: number, y: number, maxWidth?: number | undefined) => ctx.fillText(text, x, y, maxWidth);
+
+export const ctxMoveTo = (ctx: AnyCanvasRenderingContext2D, x: number, y: number) => ctx.moveTo(x, y);
+export const ctxLineTo = (ctx: AnyCanvasRenderingContext2D, x: number, y: number) => ctx.lineTo(x, y);
+
+export const ctxGetRainbowGradient = (ctx: AnyCanvasRenderingContext2D, x0: number, y0: number, x1: number, y1: number, alpha: string) => {
+  const gradient = ctx.createLinearGradient(x0, y0, x1, y1);
+  const addStop = (offset: number, color: string) => gradient.addColorStop(offset, color + alpha);
+
+  addStop(0.00, `#f00${alpha}`);
+  addStop(0.17, `#f80${alpha}`);
+  addStop(0.33, `#ff0${alpha}`);
+  addStop(0.50, `#0f0${alpha}`);
+  addStop(0.67, `#00f${alpha}`);
+  addStop(0.83, `#408${alpha}`);
+  addStop(1.00, `#80f${alpha}`);
+
+  return gradient;
+};
+
+export const ctxSetFillStyle = (ctx: AnyCanvasRenderingContext2D, color: string | CanvasGradient | CanvasPattern) => ctx.fillStyle = color;
 
 export function createOffscreenCanvas(width: number, height: number, alpha: boolean, read: boolean) {
   const offscreenCanvas = new OffscreenCanvas(width, height);
