@@ -10,6 +10,8 @@ import { kVerticalFov, type Camera } from "./core/camera";
 import { renderGameUI } from "./game/game-ui";
 import { controllerProcessPlayerInput, controllerSetupPlayerInput } from "./game/controllers";
 import { collisionActivateEntity } from "./game/collision";
+import { terrainGenerateHills } from "./game/terrain";
+import { waterGenerate } from "./game/water";
 
 const kTargetTickTime = 1/120;
 
@@ -77,6 +79,8 @@ export const gameInit = () => {
   trackLoadData(Game.mTrack, tracks[5]);
   trackDrawTexture(Game.mTrack);
   cloudsGenerate();
+  terrainGenerateHills();
+  waterGenerate();
   
   const racersCount = Game.mRacers.length;
   const startRows = 2;

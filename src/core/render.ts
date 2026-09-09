@@ -1,10 +1,12 @@
 import { easeInOutQuad, easeInOutSine, easeInQuad, easeInSine, easeOutQuad, easeOutSine } from "../easing";
 import { cloudsGetPixels } from "../game/clouds";
+import { terrainGetPixels } from "../game/terrain";
 import { kMathEpsilon, kMathHalfPi, kMathPi, kMathTau, mathAbs, mathAtan2, mathCeil, mathClamp, mathCos, mathHypot, mathJs, mathMax, mathMin, mathMod, mathSin, mathSqrt, mathTan, type Vec2, } from "../math";
 import type { Camera } from "../core/camera";
 import { kVerticalFov } from "../core/camera";
 import { canvas, createOffscreenCanvas, ctx } from "../sys/context";
 import type { Entity } from "./entity";
+import { waterGetPixels } from "../game/water";
 
 export interface Renderable extends Entity {
   mScreenPos: Vec2;
@@ -46,7 +48,9 @@ let animationTime = 0;
 let cloudsWindOffsetX = 0;
 let cloudsWindOffsetY = 0;
 
+const kTerrainPlaneHeightOffset = 250;
 const kCloudsPlaneHeightOffset = 50;
+const kSkyCloudsPlaneHeightOffset = 150;
 const kCloudsWindSpeedX = 6;
 const kCloudsWindSpeedY = -2;
 
@@ -110,15 +114,21 @@ const horTanTable = (() => {
 
 let trackPixels: Uint32Array | null = null;
 let cloudsPixels: Uint32Array | null = null;
+let terrainPixels: Uint32Array | null = null;
 const outputData = projectedPlaneCtx.createImageData(canvas.width, canvas.height);
 const outputPixels = new Uint32Array(outputData.data.buffer);
 const kMask = (2048 * 2) - 1; // Track texture is always power of two, and mod operator tanks the frame rate
 const kCloudsMask = 512 - 1;
+// const kTerrainMask = 512 - 1;
+const kTerrainMask = 512 - 1;
 const kSkyColor = 0xffebce87;
-const kFogFactor = 0.1;
+// const kSkyColor = 0xff0050e8;
 const kGroundBaseColor = 0xff2b8f2b;
 const kGroundSkyTint = 0.2;
 const kGroundColor = blendAbgr(kGroundBaseColor, kSkyColor, kGroundSkyTint);
+const kFogFactor = 0.05;
+const kTerrainOffsetX = 812;
+const kTerrainOffsetY = -1307;
 const kRacerScaleFromFocal = 440 / ((900 * 0.5) / mathTan(kVerticalFov * 0.5));
 
 function blendAbgr(src: number, dst: number, t: number): number {
@@ -179,6 +189,10 @@ function renderProjectedPlane(camera: Camera, a: any) {
   if (!cloudsPixels) {
     cloudsPixels = cloudsGetPixels();
   }
+  if (!terrainPixels) {
+    terrainPixels = terrainGetPixels();
+    // terrainPixels = waterGetPixels();
+  }
 
   const width = canvas.width;
   const height = canvas.height;
@@ -189,6 +203,7 @@ function renderProjectedPlane(camera: Camera, a: any) {
   const yawCos = mathCos(camera.mAngle);
   const rowStride = kMask + 1;
   const cloudsRowStride = kCloudsMask + 1;
+  const terrainRowStride = kTerrainMask + 1;
 
   for (let j = 0; j < height; ++j) {
     const outputRow = (height - 1 - j);
@@ -197,50 +212,94 @@ function renderProjectedPlane(camera: Camera, a: any) {
     const rayY = -camCos - (sy * camSin);
     const rayZ = -camSin + (sy * camCos);
 
-    if (rayZ >= -1e-6) {
-      outputPixels.fill(kSkyColor, outputRow * width, (outputRow + 1) * width);
+    if (rayZ >= -kMathEpsilon) {
+      // outputPixels.fill(kSkyColor, outputRow * width, (outputRow + 1) * width);
+      // continue;
+
+      const skyRayZ = mathMax(rayZ, 1e-6);
+      const skyInvZ = 1 / skyRayZ;
+      const skyCloudsT = (kSkyCloudsPlaneHeightOffset - camera.mHeight) * skyInvZ;
+
+      if (skyCloudsT <= 0) {
+        outputPixels.fill(kSkyColor, outputRow * width, (outputRow + 1) * width);
+        continue;
+      }
+
+      const skyCloudsLocalY = skyCloudsT * rayY;
+      const outputRowOffset = outputRow * width;
+      const skyLinearFogValue = mathClamp((1 - mathAbs(rayZ / 0.2)) * 1.1, 0, 1);
+
+      for (let i = 0; i < width; ++i) {
+        const sx = horTanTable[i];
+        const skyCloudsLocalX = skyCloudsT * sx;
+        const cloudsWorldX = (yawCos * skyCloudsLocalX) - (yawSin * skyCloudsLocalY) + cloudsWindOffsetX;
+        const cloudsWorldY = (yawSin * skyCloudsLocalX) + (yawCos * skyCloudsLocalY) + cloudsWindOffsetY;
+        const cloudsTexX = (camera.mPos.x + cloudsWorldX) | 0;
+        const cloudsTexY = (camera.mPos.y + cloudsWorldY) | 0;
+        const cloudsRowOffset = (cloudsTexY & kCloudsMask) * cloudsRowStride;
+        const cloudsTextureIdx = cloudsRowOffset + (cloudsTexX & kCloudsMask);
+
+        const cloudColor = cloudsPixels[cloudsTextureIdx];
+        const cloudsFogged = (skyLinearFogValue > 0)
+          ? blendAbgr(cloudColor, kSkyColor, skyLinearFogValue)
+          : cloudColor;
+
+        outputPixels[outputRowOffset + i] = overAbgr(cloudsFogged, kSkyColor);
+      }
       continue;
     }
 
     const invZ = 1 / -rayZ;
     const t = camera.mHeight * invZ;
     const cloudsT = (camera.mHeight + kCloudsPlaneHeightOffset) * invZ;
+    const terrainT = (camera.mHeight + kTerrainPlaneHeightOffset) * invZ;
     const localY = t * rayY;
     const cloudsLocalY = cloudsT * rayY;
-    const linearFogValue = mathClamp((invZ * kFogFactor) - 1, 0, 1);
-    const fogValue = easeOutQuad(linearFogValue);
+    const terrainLocalY = terrainT * rayY;
+    const fogValue = mathClamp((1 - mathAbs(rayZ / 0.2)) * 1.1, 0, 1);
 
     for (let i = 0; i < width; ++i) {
       const sx = horTanTable[i];
       const localX = t * sx;
       const cloudsLocalX = cloudsT * sx;
+      const terrainLocalX = terrainT * sx;
 
       const worldX = (yawCos * localX) - (yawSin * localY);
       const worldY = (yawSin * localX) + (yawCos * localY);
       const cloudsWorldX = (yawCos * cloudsLocalX) - (yawSin * cloudsLocalY) + cloudsWindOffsetX;
       const cloudsWorldY = (yawSin * cloudsLocalX) + (yawCos * cloudsLocalY) + cloudsWindOffsetY;
+      const terrainWorldX = (yawCos * terrainLocalX) - (yawSin * terrainLocalY);
+      const terrainWorldY = (yawSin * terrainLocalX) + (yawCos * terrainLocalY);
 
       const texX = (camera.mPos.x + worldX) | 0;
       const texY = (camera.mPos.y + worldY) | 0;
       const cloudsTexX = (camera.mPos.x + cloudsWorldX) | 0;
       const cloudsTexY = (camera.mPos.y + cloudsWorldY) | 0;
+      const terrainTexX = (camera.mPos.x + worldX + kTerrainOffsetX + terrainWorldX) | 0;
+      const terrainTexY = (camera.mPos.y + worldY + kTerrainOffsetY + terrainWorldY) | 0;
       const rowOffset = (texY & kMask) * rowStride;
       const textureIdx = rowOffset + (texX & kMask);
       const cloudsRowOffset = (cloudsTexY & kCloudsMask) * cloudsRowStride;
       const cloudsTextureIdx = cloudsRowOffset + (cloudsTexX & kCloudsMask);
+      const terrainRowOffset = (terrainTexY & kTerrainMask) * terrainRowStride;
+      const terrainTextureIdx = terrainRowOffset + (terrainTexX & kTerrainMask);
       const outputIdx = (width * outputRow) + i;
 
       const trackColor = trackPixels[textureIdx];
       const cloudColor = cloudsPixels[cloudsTextureIdx];
+      const terrainColor = terrainPixels[terrainTextureIdx];
+      // const groundFogged = (fogValue > 0)
+      //   ? blendAbgr(kGroundColor, kSkyColor, fogValue)
+      //   : kGroundColor;
       const groundFogged = (fogValue > 0)
-        ? blendAbgr(kGroundColor, kSkyColor, fogValue)
-        : kGroundColor;
+        ? blendAbgr(terrainColor, kSkyColor, fogValue)
+        : terrainColor;
       const cloudsFogged = (fogValue > 0)
-        ? blendAbgr(cloudColor, kSkyColor, linearFogValue)
+        ? blendAbgr(cloudColor, kSkyColor, fogValue)
         : cloudColor;
 
       const trackFogged = (fogValue > 0)
-        ? blendAbgr(trackColor, kSkyColor, linearFogValue)
+        ? blendAbgr(trackColor, kSkyColor, fogValue)
         : trackColor;
 
       const groundAndClouds = overAbgr(cloudsFogged, groundFogged);

@@ -81,6 +81,67 @@ export const mathPingPong = (v: number, min: number, max: number) => {
   return low + (t < length ? t : cycle - t);
 };
 
+//#region Noise
+// Based on https://github.com/jobtalle/CubicNoise
+
+export const noiseBufferedCubicNoise = (width: number, height: number) => {
+  const values = new Float32Array(width * height);
+
+  for (let i = 0; i < values.length; ++i) {
+    values[i] = Math.random();
+  }
+
+  return values;
+}
+
+export const interpolateCubicNoise = (a: number, b: number, c: number, d: number, x: number) => {
+  const p = (d - c) - (a - b);
+  return x * (x * (x * p + ((a - b) - p)) + (c - a)) + b;
+}
+
+export const sampleCubicNoise = (x: number, y: number, values: Float32Array, width: number, height: number) => {
+  const xi = x | 0;
+  const yi = y | 0;
+  const tx = x - xi;
+  const ty = y - yi;
+
+  const getValue = (sx: number, sy: number) => values[(mathMod(sy, height) * width) + mathMod(sx, width)];
+
+  return interpolateCubicNoise(
+    interpolateCubicNoise(
+      getValue(xi, yi),
+      getValue(xi + 1, yi),
+      getValue(xi + 2, yi),
+      getValue(xi + 3, yi),
+      tx
+    ),
+    interpolateCubicNoise(
+      getValue(xi, yi + 1),
+      getValue(xi + 1, yi + 1),
+      getValue(xi + 2, yi + 1),
+      getValue(xi + 3, yi + 1),
+      tx
+    ),
+    interpolateCubicNoise(
+      getValue(xi, yi + 2),
+      getValue(xi + 1, yi + 2),
+      getValue(xi + 2, yi + 2),
+      getValue(xi + 3, yi + 2),
+      tx
+    ),
+    interpolateCubicNoise(
+      getValue(xi, yi + 3),
+      getValue(xi + 1, yi + 3),
+      getValue(xi + 2, yi + 3),
+      getValue(xi + 3, yi + 3),
+      tx
+    ),
+    ty
+  ) * 0.5 + 0.25;
+}
+
+//#endregion
+
 export const vec2New = (x = 0, y = 0): Vec2 => ({ x, y });
 
 export const vec2NewCopy = (v: Vec2): Vec2 => ({ x: v.x, y: v.y });

@@ -1,6 +1,6 @@
 // Based on https://github.com/jobtalle/CubicNoise
 
-import { mathMod, mathSmoothstep } from "../math";
+import { mathMod, mathSmoothstep, noiseBufferedCubicNoise, sampleCubicNoise } from "../math";
 import { createOffscreenCanvas } from "../sys/context";
 
 const kBaseNoiseWidth = 16 as const;
@@ -17,7 +17,7 @@ const cloudsImageData = cloudsCtx.getImageData(0, 0, kCloudsNoiseWidth, kCloudsN
 const cloudsPixels = new Uint32Array(cloudsImageData.data.buffer);
 
 export function cloudsGenerate() {
-  const baseNoise = bufferedCubicNoise(kBaseNoiseWidth, kBaseNoiseWidth);
+  const baseNoise = noiseBufferedCubicNoise(kBaseNoiseWidth, kBaseNoiseWidth);
 
   for (let y = 0; y < kCloudsNoiseWidth; ++y) {
     for (let x = 0; x < kCloudsNoiseWidth; ++x) {
@@ -64,60 +64,4 @@ export function cloudsGetCanvas() {
 
 export function cloudsGetPixels() {
   return cloudsPixels;
-}
-
-function bufferedCubicNoise(width: number, height: number) {
-  const values = new Float32Array(width * height);
-
-  for (let i = 0; i < values.length; ++i) {
-    values[i] = Math.random();
-  }
-
-  return values;
-}
-
-function interpolateCubicNoise(a: number, b: number, c: number, d: number, x: number) {
-  const p = (d - c) - (a - b);
-  return x * (x * (x * p + ((a - b) - p)) + (c - a)) + b;
-}
-
-function sampleCubicNoise(x: number, y: number, values: Float32Array, width: number, height: number) {
-  const xi = x | 0;
-  const yi = y | 0;
-  const tx = x - xi;
-  const ty = y - yi;
-
-  const getValue = (sx: number, sy: number) => values[(mathMod(sy, height) * width) + mathMod(sx, width)];
-
-  return interpolateCubicNoise(
-    interpolateCubicNoise(
-      getValue(xi, yi),
-      getValue(xi + 1, yi),
-      getValue(xi + 2, yi),
-      getValue(xi + 3, yi),
-      tx
-    ),
-    interpolateCubicNoise(
-      getValue(xi, yi + 1),
-      getValue(xi + 1, yi + 1),
-      getValue(xi + 2, yi + 1),
-      getValue(xi + 3, yi + 1),
-      tx
-    ),
-    interpolateCubicNoise(
-      getValue(xi, yi + 2),
-      getValue(xi + 1, yi + 2),
-      getValue(xi + 2, yi + 2),
-      getValue(xi + 3, yi + 2),
-      tx
-    ),
-    interpolateCubicNoise(
-      getValue(xi, yi + 3),
-      getValue(xi + 1, yi + 3),
-      getValue(xi + 2, yi + 3),
-      getValue(xi + 3, yi + 3),
-      tx
-    ),
-    ty
-  ) * 0.5 + 0.25;
 }

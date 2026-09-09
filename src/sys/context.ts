@@ -40,13 +40,13 @@ export const ctxGetRainbowGradient = (ctx: AnyCanvasRenderingContext2D, x0: numb
   const gradient = ctx.createLinearGradient(x0, y0, x1, y1);
   const addStop = (offset: number, color: string) => gradient.addColorStop(offset, color + alpha);
 
-  addStop(0.00, `#f00${alpha}`);
-  addStop(0.17, `#f80${alpha}`);
-  addStop(0.33, `#ff0${alpha}`);
-  addStop(0.50, `#0f0${alpha}`);
-  addStop(0.67, `#00f${alpha}`);
-  addStop(0.83, `#408${alpha}`);
-  addStop(1.00, `#80f${alpha}`);
+  addStop(0.00, '#f00');
+  addStop(0.17, '#f80');
+  addStop(0.33, '#ff0');
+  addStop(0.50, '#0f0');
+  addStop(0.67, '#00f');
+  addStop(0.83, '#408');
+  addStop(1.00, '#80f');
 
   return gradient;
 };
