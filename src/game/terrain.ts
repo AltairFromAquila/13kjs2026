@@ -1,16 +1,18 @@
 import { mathClamp, noiseBufferedCubicNoise, sampleCubicNoise } from "../math";
-import { createOffscreenCanvas } from "../sys/context";
+import { ctxCreateOffscreenCanvas, ctxGetCanvasImageData } from "../sys/context";
 
 const kBaseNoiseWidth = 16 as const;
 const kTerrainWidth = 512 as const;
 const kTerrainMask = kTerrainWidth - 1;
 
 const {
-  offscreenCanvas: terrainCanvas,
-  offscreenCtx: terrainCtx
-} = createOffscreenCanvas(kTerrainWidth, kTerrainWidth, false, true);
-const terrainImageData = terrainCtx.getImageData(0, 0, kTerrainWidth, kTerrainWidth);
-const terrainPixels = new Uint32Array(terrainImageData.data.buffer);
+  mCanvas: terrainCanvas,
+  mCtx: terrainCtx,
+} = ctxCreateOffscreenCanvas(kTerrainWidth, kTerrainWidth, false, true);
+const {
+  mImage: terrainImageData,
+  mPixels: terrainPixels,
+} = ctxGetCanvasImageData(terrainCtx, kTerrainWidth, kTerrainWidth);
 
 // Fertile lands
 const kTerrainColorStops: { height: number; color: [number, number, number]; }[] = [

@@ -43,7 +43,7 @@ export class Track {
   secondaryPaths: SecondaryPath[] = [];
 
   textureCanvas: OffscreenCanvas = new OffscreenCanvas(2048 * 2, 2048 * 2);
-  textureCtx: OffscreenRenderingContext = this.textureCanvas.getContext('2d', { willReadFrequently: true })!;
+  textureCtx: OffscreenCanvasRenderingContext2D = this.textureCanvas.getContext('2d', { willReadFrequently: true })!;
 }
 
 const kStartPosDistanceFromStartLine = 12 as const;

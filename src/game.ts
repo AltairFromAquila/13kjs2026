@@ -1,7 +1,7 @@
-import { render, type RenderableCommand } from "./core/render";
+import { render, renderAssignPlanes, renderSetColors, type RenderableCommand } from "./core/render";
 import { racerDataGetSkeleton, racerDataGetSkeletonShapes } from "./data/racer.data";
 import { tracks } from "./data/track.data";
-import { cloudsGenerate } from "./game/clouds";
+import { cloudsGenerate, cloudsGetPixels } from "./game/clouds";
 import { racerFixedTick, racerNew, racerRender, racerSetAngleFromVector, racerSetupTrackPoints, racerTick, type Racer } from "./game/racer";
 import { Track, trackDrawTexture, trackGetStartPositions, trackLoadData } from "./game/track";
 import { mathCeil, mathJs, mathMin, mathTan, vec2Add, vec2Copy, vec2MulScalar, vec2New } from "./math";
@@ -10,8 +10,9 @@ import { kVerticalFov, type Camera } from "./core/camera";
 import { renderGameUI } from "./game/game-ui";
 import { controllerProcessPlayerInput, controllerSetupPlayerInput } from "./game/controllers";
 import { collisionActivateEntity } from "./game/collision";
-import { terrainGenerateHills } from "./game/terrain";
+import { terrainGenerateHills, terrainGetPixels } from "./game/terrain";
 import { waterGenerate } from "./game/water";
+import { ctxGetCanvasImageData } from "./sys/context";
 
 const kTargetTickTime = 1/120;
 
@@ -81,6 +82,17 @@ export const gameInit = () => {
   cloudsGenerate();
   terrainGenerateHills();
   waterGenerate();
+
+  const trackImageData = ctxGetCanvasImageData(Game.mTrack.textureCtx, Game.mTrack.textureCanvas.width, Game.mTrack.textureCanvas.height);
+
+  renderAssignPlanes(
+    trackImageData.mPixels,
+    cloudsGetPixels(),
+    terrainGetPixels(),
+    Game.mTrack.textureCanvas.width, 512, 512,
+    0, 25, 100
+  );
+  renderSetColors(0xffbb55, 0xff00cc30);
   
   const racersCount = Game.mRacers.length;
   const startRows = 2;
@@ -132,10 +144,8 @@ function processDefault(self: Game, delta: number) {
   }
   cameraGameCamTick(self.mCamera as GameCamera, delta);
   // cameraHandleFreeCamInput(self.mCamera as FreeCamera, delta);
-  render(self.mCamera, self.mTrack, self.mRenderRacerCmd);
+  render(self.mCamera, self.mRenderRacerCmd);
   renderGameUI(delta);
-  // ctx.drawImage(self.track.textureCanvas, 0, -650, 2800, 2800);
-  // ctx.drawImage(self.track.textureCanvas, 0, 0, 1400, 1400);
 }
 
 function processWithFixed(self: Game, delta: number) {

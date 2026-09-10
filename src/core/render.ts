@@ -1,12 +1,37 @@
-import { easeInOutQuad, easeInOutSine, easeInQuad, easeInSine, easeOutQuad, easeOutSine } from "../easing";
-import { cloudsGetPixels } from "../game/clouds";
-import { terrainGetPixels } from "../game/terrain";
-import { kMathEpsilon, kMathHalfPi, kMathPi, kMathTau, mathAbs, mathAtan2, mathCeil, mathClamp, mathCos, mathHypot, mathJs, mathMax, mathMin, mathMod, mathSin, mathSqrt, mathTan, type Vec2, } from "../math";
+import { kMathEpsilon, kMathHalfPi, kMathPi, kMathTau, mathAbs, mathAtan2, mathClamp, mathCos, mathMax, mathMod, mathSin, mathTan, vec2New, type Vec2 } from "../math";
 import type { Camera } from "../core/camera";
-import { kVerticalFov } from "../core/camera";
-import { canvas, createOffscreenCanvas, ctx } from "../sys/context";
+import { canvas, ctxCreateOffscreenCanvas, ctx, ctxGetCanvasImageData } from "../sys/context";
 import type { Entity } from "./entity";
-import { waterGetPixels } from "../game/water";
+
+export interface RenderState {
+  mVerTanTable: number[];
+  mHorTanTable: number[];
+
+  mTerrainPixels: Uint32Array | null;
+  mCloudsPixels: Uint32Array | null;
+  mTrackPixels: Uint32Array | null;
+
+  mTerrainOffset: Vec2;
+  mCloudsOffset: Vec2;
+
+  mSkyColor: number;
+  mGroundColor: number;
+
+  mSkyCloudsHeight: number;
+  mCloudsHeight: number;
+  mTerrainHeight: number;
+
+  mTerrainWidth: number;
+  mCloudsWidth: number;
+  mTrackWidth: number;
+
+  mFogDistance: number;
+  mFogIntensity: number;
+
+  mPrevVerticalFov: number;
+  mPrevCanvasWidth: number;
+  mPrevCanvasHeight: number;
+}
 
 export interface Renderable extends Entity {
   mScreenPos: Vec2;
@@ -16,6 +41,13 @@ export interface RenderableCommand<R extends Renderable> {
   mRenderables: R[];
   mScale: number;
   mCommand: (self: R, ctx: CanvasRenderingContext2D, x: number, y: number, invZ: number, angle: number, scale: number, alpha: number) => void;
+}
+
+interface RenderFrameCache {
+  mCamAngleSin: number;
+  mCamAngleCos: number;
+  mCamPitchSin: number;
+  mCamPitchCos: number;
 }
 
 interface SortedRenderable<R extends Renderable = Renderable> {
@@ -28,110 +60,53 @@ interface SortedRenderable<R extends Renderable = Renderable> {
   mAlpha: number;
 }
 
-const easingFunctions = [
-  (x: number) => x,
-  easeInSine,
-  easeOutSine,
-  easeInOutSine,
-  easeInQuad,
-  easeOutQuad,
-  easeInOutQuad
-];
+const renderState: RenderState = {
+  mVerTanTable: [],
+  mHorTanTable: [],
 
+  mTerrainPixels: null,
+  mCloudsPixels: null,
+  mTrackPixels: null,
+
+  mTerrainOffset: vec2New(),
+  mCloudsOffset: vec2New(),
+
+  mSkyColor: 0,
+  mGroundColor: 0,
+
+  mSkyCloudsHeight: 0,
+  mCloudsHeight: 0,
+  mTerrainHeight: 0,
+
+  mTerrainWidth: 0,
+  mCloudsWidth: 0,
+  mTrackWidth: 0,
+
+  mFogDistance: 0.2,
+  mFogIntensity: 1.1,
+
+  mPrevVerticalFov: 0,
+  mPrevCanvasWidth: 0,
+  mPrevCanvasHeight: 0,
+};
+const renderFrameCache: RenderFrameCache = {
+  mCamAngleSin: 0,
+  mCamAngleCos: 0,
+  mCamPitchSin: 0,
+  mCamPitchCos: 0,
+}
 const workSortedRenderables: SortedRenderable[] = [];
 
-const kTau = mathJs.PI * 2;
-let prevInputUpdateTime = performance.now();
-let racerRotation = mathJs.PI * 0.25;
-let animationTime = 0;
-
-let cloudsWindOffsetX = 0;
-let cloudsWindOffsetY = 0;
-
-const kTerrainPlaneHeightOffset = 250;
-const kCloudsPlaneHeightOffset = 50;
-const kSkyCloudsPlaneHeightOffset = 150;
-const kCloudsWindSpeedX = 6;
-const kCloudsWindSpeedY = -2;
-
 const {
-  offscreenCanvas: projectedPlaneCanvas,
-  offscreenCtx: projectedPlaneCtx
-} = createOffscreenCanvas(canvas.width, canvas.height, false, false);
-// const projectedPlaneCanvas: OffscreenCanvas = new OffscreenCanvas(canvas.width, canvas.height);
-// const projectedPlaneCtx: OffscreenCanvasRenderingContext2D = projectedPlaneCanvas.getContext('2d')!;
+  mCanvas: projectedPlaneCanvas,
+  mCtx: projectedPlaneCtx,
+} = ctxCreateOffscreenCanvas(canvas.width, canvas.height, false, false);
+let {
+  mImage: planeImageData,
+  mPixels: planePixels,
+} = ctxGetCanvasImageData(projectedPlaneCtx, canvas.width, canvas.height);
 
-export function render<R extends Renderable>(camera: Camera, a: any, renderableCmd: RenderableCommand<R>) {
-  const now = performance.now();
-  const deltaMs = now - prevInputUpdateTime;
-  // racerRotation += (now - prevInputUpdateTime) * 0.001;
-  animationTime = (animationTime + deltaMs * 0.0015) % 1.0;
-  const deltaSec = deltaMs * 0.001;
-  cloudsWindOffsetX += kCloudsWindSpeedX * deltaSec;
-  cloudsWindOffsetY += kCloudsWindSpeedY * deltaSec;
-  prevInputUpdateTime = now;
-
-  renderProjectedPlane(camera, a);
-
-  const rotationOff = (mathJs.PI * 0.5) - racerRotation;
-  if (rotationOff < 0) {
-    racerRotation = -((mathJs.PI * 0.5) + rotationOff);
-  }
-
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(projectedPlaneCanvas, 0, 0);
-  // renderRacer();
-
-  renderRenderables(camera, renderableCmd);
-  // renderRacer2(b);
-}
-
-const verTanTable = (() => {
-  const halfHeight = canvas.height * 0.5;
-  const tanHalfFov = mathTan(kVerticalFov * 0.5);
-  const ret: number[] = [];
-
-  for (let y = 0; y < canvas.height; ++y) {
-    const ndcY = ((y + 0.5) - halfHeight) / halfHeight;
-    ret.push(ndcY * tanHalfFov);
-  }
-
-  return ret;
-})();
-const horTanTable = (() => {
-  const halfWidth = canvas.width * 0.5;
-  const tanHalfVFov = mathTan(kVerticalFov * 0.5);
-  const tanHalfHFov = tanHalfVFov * (canvas.width / canvas.height);
-  const ret: number[] = [];
-
-  for (let x = 0; x < canvas.width; ++x) {
-    const ndcX = ((x + 0.5) - halfWidth) / halfWidth;
-    ret.push(ndcX * tanHalfHFov);
-  }
-
-  return ret;
-})();
-
-let trackPixels: Uint32Array | null = null;
-let cloudsPixels: Uint32Array | null = null;
-let terrainPixels: Uint32Array | null = null;
-const outputData = projectedPlaneCtx.createImageData(canvas.width, canvas.height);
-const outputPixels = new Uint32Array(outputData.data.buffer);
-const kMask = (2048 * 2) - 1; // Track texture is always power of two, and mod operator tanks the frame rate
-const kCloudsMask = 512 - 1;
-// const kTerrainMask = 512 - 1;
-const kTerrainMask = 512 - 1;
-const kSkyColor = 0xffebce87;
-// const kSkyColor = 0xff0050e8;
-const kGroundBaseColor = 0xff2b8f2b;
-const kGroundSkyTint = 0.2;
-const kGroundColor = blendAbgr(kGroundBaseColor, kSkyColor, kGroundSkyTint);
-const kFogFactor = 0.05;
-const kTerrainOffsetX = 812;
-const kTerrainOffsetY = -1307;
-const kRacerScaleFromFocal = 440 / ((900 * 0.5) / mathTan(kVerticalFov * 0.5));
-
-function blendAbgr(src: number, dst: number, t: number): number {
+const blendAbgr = (src: number, dst: number, t: number): number => {
   const invT = 1 - t;
 
   const srcR = src & 0xff;
@@ -152,7 +127,7 @@ function blendAbgr(src: number, dst: number, t: number): number {
   return (outA << 24) | (outB << 16) | (outG << 8) | outR;
 }
 
-function overAbgr(top: number, bottom: number): number {
+const overAbgr = (top: number, bottom: number): number => {
   const topA = (top >>> 24) & 0xff;
   if (topA === 0xff) return top;
   if (topA === 0) return bottom;
@@ -179,1357 +154,177 @@ function overAbgr(top: number, bottom: number): number {
     | ((outR | 0) & 0xff);
 }
 
-function renderProjectedPlane(camera: Camera, a: any) {
-  if (!trackPixels) {
-    const trackCanvas = a.textureCanvas as OffscreenCanvas;
-    const trackImage = a.textureCtx.getImageData(0, 0, trackCanvas.width, trackCanvas.height);
+const renderProjectedPlane = (camera: Camera) => {
+  // if (!trackPixels) {
+  //   const trackCanvas = a.textureCanvas as OffscreenCanvas;
+  //   const trackImage = a.textureCtx.getImageData(0, 0, trackCanvas.width, trackCanvas.height);
 
-    trackPixels = new Uint32Array(trackImage.data.buffer);
-  }
-  if (!cloudsPixels) {
-    cloudsPixels = cloudsGetPixels();
-  }
-  if (!terrainPixels) {
-    terrainPixels = terrainGetPixels();
-    // terrainPixels = waterGetPixels();
-  }
+  //   trackPixels = new Uint32Array(trackImage.data.buffer);
+  // }
+  // if (!cloudsPixels) {
+  //   cloudsPixels = cloudsGetPixels();
+  // }
+  // if (!terrainPixels) {
+  //   terrainPixels = terrainGetPixels();
+  //   // terrainPixels = waterGetPixels();
+  // }
 
   const width = canvas.width;
   const height = canvas.height;
 
-  const camSin = mathSin(camera.mPitch);
-  const camCos = mathCos(camera.mPitch);
-  const yawSin = mathSin(camera.mAngle);
-  const yawCos = mathCos(camera.mAngle);
-  const rowStride = kMask + 1;
-  const cloudsRowStride = kCloudsMask + 1;
-  const terrainRowStride = kTerrainMask + 1;
+  const camPitchSin = renderFrameCache.mCamPitchSin;
+  const camPitchCos = renderFrameCache.mCamPitchCos;
+  const camYawSin = renderFrameCache.mCamAngleSin;
+  const camYawCos = renderFrameCache.mCamAngleCos;
+
+  const trackRowStride = renderState.mTrackWidth
+  const cloudsRowStride = renderState.mCloudsWidth;
+  const terrainRowStride = renderState.mTerrainWidth;
+  const cloudsMask = cloudsRowStride - 1;
+  const terrainkMask = terrainRowStride - 1;
+
+  const cloudsPixels = renderState.mCloudsPixels;
+  const terrainPixels = renderState.mTerrainPixels;
+  const trackPixels = renderState.mTrackPixels;
 
   for (let j = 0; j < height; ++j) {
     const outputRow = (height - 1 - j);
-    const sy = verTanTable[j];
+    const sy = renderState.mVerTanTable[j];
 
-    const rayY = -camCos - (sy * camSin);
-    const rayZ = -camSin + (sy * camCos);
+    const rayY = -camPitchCos - (sy * camPitchSin);
+    const rayZ = -camPitchSin + (sy * camPitchCos);
+    const fogValue = mathClamp(
+      (1 - mathAbs(rayZ / renderState.mFogDistance)) * renderState.mFogIntensity, 0, 1
+    );
 
     if (rayZ >= -kMathEpsilon) {
-      // outputPixels.fill(kSkyColor, outputRow * width, (outputRow + 1) * width);
-      // continue;
+      if (cloudsPixels && renderState.mSkyCloudsHeight > 0) {
+        const skyRayZ = mathMax(rayZ, kMathEpsilon);
+        const skyInvZ = 1 / skyRayZ;
+        const skyCloudsT = renderState.mSkyCloudsHeight * skyInvZ; // Clouds are at a fixed height relative to the camera
 
-      const skyRayZ = mathMax(rayZ, 1e-6);
-      const skyInvZ = 1 / skyRayZ;
-      const skyCloudsT = (kSkyCloudsPlaneHeightOffset - camera.mHeight) * skyInvZ;
+        const skyCloudsLocalY = skyCloudsT * rayY;
+        const outputRowOffset = outputRow * width;
 
-      if (skyCloudsT <= 0) {
-        outputPixels.fill(kSkyColor, outputRow * width, (outputRow + 1) * width);
-        continue;
+        for (let i = 0; i < width; ++i) {
+          const sx = renderState.mHorTanTable[i];
+          const skyCloudsLocalX = skyCloudsT * sx;
+          const cloudsWorldX = (camYawCos * skyCloudsLocalX) - (camYawSin * skyCloudsLocalY) + renderState.mCloudsOffset.x;
+          const cloudsWorldY = (camYawSin * skyCloudsLocalX) + (camYawCos * skyCloudsLocalY) + renderState.mCloudsOffset.y;
+          const cloudsTexX = (camera.mPos.x + cloudsWorldX) | 0;
+          const cloudsTexY = (camera.mPos.y + cloudsWorldY) | 0;
+          const cloudsRowOffset = (cloudsTexY & cloudsMask) * cloudsRowStride;
+          const cloudsTextureIdx = cloudsRowOffset + (cloudsTexX & cloudsMask);
+
+          const cloudColor = cloudsPixels[cloudsTextureIdx];
+          const cloudsFogged = (fogValue > 0)
+            ? blendAbgr(cloudColor, renderState.mSkyColor, fogValue)
+            : cloudColor;
+
+          planePixels[outputRowOffset + i] = overAbgr(cloudsFogged, renderState.mSkyColor);
+        }
+      } else {
+        planePixels.fill(renderState.mSkyColor, outputRow * width, (outputRow + 1) * width);
       }
 
-      const skyCloudsLocalY = skyCloudsT * rayY;
-      const outputRowOffset = outputRow * width;
-      const skyLinearFogValue = mathClamp((1 - mathAbs(rayZ / 0.2)) * 1.1, 0, 1);
-
-      for (let i = 0; i < width; ++i) {
-        const sx = horTanTable[i];
-        const skyCloudsLocalX = skyCloudsT * sx;
-        const cloudsWorldX = (yawCos * skyCloudsLocalX) - (yawSin * skyCloudsLocalY) + cloudsWindOffsetX;
-        const cloudsWorldY = (yawSin * skyCloudsLocalX) + (yawCos * skyCloudsLocalY) + cloudsWindOffsetY;
-        const cloudsTexX = (camera.mPos.x + cloudsWorldX) | 0;
-        const cloudsTexY = (camera.mPos.y + cloudsWorldY) | 0;
-        const cloudsRowOffset = (cloudsTexY & kCloudsMask) * cloudsRowStride;
-        const cloudsTextureIdx = cloudsRowOffset + (cloudsTexX & kCloudsMask);
-
-        const cloudColor = cloudsPixels[cloudsTextureIdx];
-        const cloudsFogged = (skyLinearFogValue > 0)
-          ? blendAbgr(cloudColor, kSkyColor, skyLinearFogValue)
-          : cloudColor;
-
-        outputPixels[outputRowOffset + i] = overAbgr(cloudsFogged, kSkyColor);
-      }
       continue;
     }
 
     const invZ = 1 / -rayZ;
     const t = camera.mHeight * invZ;
-    const cloudsT = (camera.mHeight + kCloudsPlaneHeightOffset) * invZ;
-    const terrainT = (camera.mHeight + kTerrainPlaneHeightOffset) * invZ;
+    const cloudsT = (camera.mHeight + renderState.mCloudsHeight) * invZ;
+    const terrainT = (camera.mHeight + renderState.mTerrainHeight) * invZ;
     const localY = t * rayY;
     const cloudsLocalY = cloudsT * rayY;
     const terrainLocalY = terrainT * rayY;
-    const fogValue = mathClamp((1 - mathAbs(rayZ / 0.2)) * 1.1, 0, 1);
 
     for (let i = 0; i < width; ++i) {
-      const sx = horTanTable[i];
+      const sx = renderState.mHorTanTable[i];
       const localX = t * sx;
-      const cloudsLocalX = cloudsT * sx;
-      const terrainLocalX = terrainT * sx;
 
-      const worldX = (yawCos * localX) - (yawSin * localY);
-      const worldY = (yawSin * localX) + (yawCos * localY);
-      const cloudsWorldX = (yawCos * cloudsLocalX) - (yawSin * cloudsLocalY) + cloudsWindOffsetX;
-      const cloudsWorldY = (yawSin * cloudsLocalX) + (yawCos * cloudsLocalY) + cloudsWindOffsetY;
-      const terrainWorldX = (yawCos * terrainLocalX) - (yawSin * terrainLocalY);
-      const terrainWorldY = (yawSin * terrainLocalX) + (yawCos * terrainLocalY);
+      const worldX = (camYawCos * localX) - (camYawSin * localY);
+      const worldY = (camYawSin * localX) + (camYawCos * localY);
 
-      const texX = (camera.mPos.x + worldX) | 0;
-      const texY = (camera.mPos.y + worldY) | 0;
-      const cloudsTexX = (camera.mPos.x + cloudsWorldX) | 0;
-      const cloudsTexY = (camera.mPos.y + cloudsWorldY) | 0;
-      const terrainTexX = (camera.mPos.x + worldX + kTerrainOffsetX + terrainWorldX) | 0;
-      const terrainTexY = (camera.mPos.y + worldY + kTerrainOffsetY + terrainWorldY) | 0;
-      const rowOffset = (texY & kMask) * rowStride;
-      const textureIdx = rowOffset + (texX & kMask);
-      const cloudsRowOffset = (cloudsTexY & kCloudsMask) * cloudsRowStride;
-      const cloudsTextureIdx = cloudsRowOffset + (cloudsTexX & kCloudsMask);
-      const terrainRowOffset = (terrainTexY & kTerrainMask) * terrainRowStride;
-      const terrainTextureIdx = terrainRowOffset + (terrainTexX & kTerrainMask);
-      const outputIdx = (width * outputRow) + i;
+      let outputColor: number;
+      if (terrainPixels) {
+        const terrainLocalX = terrainT * sx;
+        const terrainWorldX = (camYawCos * terrainLocalX) - (camYawSin * terrainLocalY);
+        const terrainWorldY = (camYawSin * terrainLocalX) + (camYawCos * terrainLocalY);
+        const terrainTexX = (camera.mPos.x + worldX + renderState.mTerrainOffset.x + terrainWorldX) | 0;
+        const terrainTexY = (camera.mPos.y + worldY + renderState.mTerrainOffset.y + terrainWorldY) | 0;
+        const terrainRowOffset = (terrainTexY & terrainkMask) * terrainRowStride;
+        const terrainTextureIdx = terrainRowOffset + (terrainTexX & terrainkMask);
 
-      const trackColor = trackPixels[textureIdx];
-      const cloudColor = cloudsPixels[cloudsTextureIdx];
-      const terrainColor = terrainPixels[terrainTextureIdx];
-      // const groundFogged = (fogValue > 0)
-      //   ? blendAbgr(kGroundColor, kSkyColor, fogValue)
-      //   : kGroundColor;
-      const groundFogged = (fogValue > 0)
-        ? blendAbgr(terrainColor, kSkyColor, fogValue)
-        : terrainColor;
-      const cloudsFogged = (fogValue > 0)
-        ? blendAbgr(cloudColor, kSkyColor, fogValue)
-        : cloudColor;
-
-      const trackFogged = (fogValue > 0)
-        ? blendAbgr(trackColor, kSkyColor, fogValue)
-        : trackColor;
-
-      const groundAndClouds = overAbgr(cloudsFogged, groundFogged);
-      outputPixels[outputIdx] = overAbgr(trackFogged, groundAndClouds);
-    }
-  }
-
-  projectedPlaneCtx.putImageData(outputData, 0, 0);
-}
-
-const kVerticalFactor = 1;
-function renderRacer() {
-  type SkeletonNodeShape = {
-    points: [number, number][];
-    front?: {
-      points: [number, number][];
-      z?: number;
-    };
-    back?: {
-      points: [number, number][];
-      z?: number;
-    };
-    z?: number;
-    useParentDepth?: boolean;
-    color?: string;
-  }
-  type SkeletonNode = {
-    pos: [number, number];
-    z: number;
-    radius: number;
-    depthOffset?: number;
-    color?: string;
-    split?: boolean;
-    children?: SkeletonNode[];
-    shapes?: SkeletonNodeShape[];
-  };
-  type TransformedSkeletonNode = {
-    type: 0,
-    pos: [number, number];
-    z: number;
-    color: string;
-    ref: SkeletonNode;
-    parent: SkeletonNode | null;
-  };
-  type TransformedSkeletonPart = TransformedSkeletonNode | ({ type: 1; z: number; } & SkeletonNodeShape);
-  type AnimationFrames = {
-    [patId: number]: AnimationKeyFrame[];
-  }
-  type AnimationKeyFrame = {
-    angle: number;
-    duration: number;
-    easing: number;
-  };
-
-  const skeleton: SkeletonNode = {
-    pos: [6.2, -11.8], // Root - Pelvis
-    z: 0,
-    radius: 2.4,
-    color: "#faa",
-    children: [
-      {
-        pos: [2.1, -11], // Torso 2
-        z: 0,
-        radius: 2.9,
-        children: [
-          {
-            pos: [-2.3, -11], // Torso 1
-            z: 0,
-            radius: 3,
-            children: [
-              {
-                pos: [-3.4, -12.2], // Neck
-                z: 0,
-                radius: 2,
-                split: true,
-                children: [
-                  {
-                    pos: [-6.8, -16.6], // Head
-                    z: 0,
-                    radius: 1.2,
-                    children: [
-                      {
-                        pos: [-10, -15], // Mouth
-                        z: 0,
-                        radius: 0.7,
-                        split: true,
-                      },
-                      {
-                        pos: [-8.1, -16.7], // Eye 1
-                        z: 0.8,
-                        radius: 0.3,
-                        split: true,
-                        depthOffset: 1.8,
-                        color: "#000"
-                      },
-                      {
-                        pos: [-8.1, -16.7], // Eye 2
-                        z: -0.8,
-                        radius: 0.3,
-                        split: true,
-                        color: "#000"
-                      },
-                      {
-                        pos: [-8.55, -17.6], // Horn
-                        z: 0,
-                        radius: 0.35,
-                        split: true,
-                        color: "#b44",
-                        depthOffset: -1,
-                        children: [
-                          {
-                            pos: [-10.25, -21], // Horn Tip
-                            z: 0,
-                            radius: 0,
-                          }
-                        ]
-                      },
-                      {
-                        pos: [-7.5, -17.4], // Ear
-                        z: 0.5,
-                        radius: 0.4,
-                        split: true,
-                        depthOffset: -1,
-                        children: [
-                          {
-                            pos: [-7.8, -19.2], // Ear Tip
-                            z: 0.8,
-                            radius: 0,
-                          }
-                        ]
-                      },
-                      {
-                        pos: [-7.5, -17.4], // Ear
-                        z: -0.5,
-                        radius: 0.4,
-                        split: true,
-                        depthOffset: -1,
-                        children: [
-                          {
-                            pos: [-7.8, -19.2], // Ear Tip
-                            z: -0.8,
-                            radius: 0,
-                          }
-                        ]
-                      },
-                      {
-                        pos: [-7.5, -17.5], // Hair 1
-                        z: 0,
-                        radius: 0.4,
-                        split: true,
-                        color: "#ff7",
-                        children: [
-                          {
-                            pos: [-7, -18],
-                            z: 0,
-                            radius: 0.2,
-                            children: [
-                              {
-                                pos: [-4, -17.5],
-                                z: 0,
-                                radius: 0,
-                              }
-                            ]
-                          }
-                        ]
-                      },
-                      {
-                        pos: [-6.5, -17.5], // Hair 2
-                        z: 0.5,
-                        radius: 0.3,
-                        split: true,
-                        color: "#ff0",
-                        depthOffset: 0.5,
-                        children: [
-                          {
-                            pos: [-5, -16.5],
-                            z: 1,
-                            radius: 0,
-                            depthOffset: 1.5,
-                          }
-                        ]
-                      },
-                      {
-                        pos: [-6.5, -17.5], // Hair 3
-                        z: -0.5,
-                        radius: 0.3,
-                        split: true,
-                        color: "#ff0",
-                        children: [
-                          {
-                            pos: [-5, -16.5],
-                            z: -1,
-                            radius: 0,
-                          }
-                        ]
-                      },
-                      {
-                        pos: [-6, -17.5], // Hair 4
-                        z: 0,
-                        radius: 0.5,
-                        split: true,
-                        color: "#ff7",
-                        depthOffset: 0.75,
-                        children: [
-                          {
-                            pos: [-2, -15],
-                            z: 0,
-                            depthOffset: 0.25,
-                            radius: 0,
-                          }
-                        ]
-                      },
-                      {
-                        pos: [-5, -16.75], // Hair 5
-                        z: 0.6,
-                        radius: 0.4,
-                        split: true,
-                        color: "#ff0",
-                        depthOffset: 0.3,
-                        children: [
-                          {
-                            pos: [-3.5, -15],
-                            z: 1.2,
-                            radius: 0,
-                            depthOffset: 1,
-                          }
-                        ]
-                      },
-                      {
-                        pos: [-5, -16.75], // Hair 6
-                        z: -0.6,
-                        radius: 0.4,
-                        split: true,
-                        color: "#ff0",
-                        children: [
-                          {
-                            pos: [-3.5, -15],
-                            z: -1.2,
-                            radius: 0,
-                          }
-                        ]
-                      },
-                      {
-                        pos: [-5, -16.5], // Hair 7
-                        z: 0,
-                        radius: 0.4,
-                        split: true,
-                        color: "#ff7",
-                        children: [
-                          {
-                            pos: [-1.5, -13.75],
-                            z: 0,
-                            depthOffset: 0.5,
-                            radius: 0,
-                          }
-                        ]
-                      },
-                      {
-                        pos: [-4.25, -16], // Hair 8
-                        z: 0.6,
-                        radius: 0.3,
-                        split: true,
-                        color: "#ff0",
-                        depthOffset: 0.3,
-                        children: [
-                          {
-                            pos: [-2.5, -14],
-                            z: 0.8,
-                            radius: 0,
-                            depthOffset: 1,
-                          }
-                        ]
-                      },
-                      {
-                        pos: [-4.25, -16], // Hair 9
-                        z: -0.6,
-                        radius: 0.3,
-                        split: true,
-                        color: "#ff0",
-                        children: [
-                          {
-                            pos: [-2.5, -14],
-                            z: -0.8,
-                            radius: 0,
-                          }
-                        ]
-                      },
-                    ],
-                    shapes: [
-                      { // Head
-                        points: [
-                          [-6.8, -15.4],
-                          [-10.7, -14.5],
-                          [-10.7, -14.5],
-                          [-11.5, -15.4],
-                          [-8.3, -17.8],
-                          [-6.8, -17.8],
-                        ],
-                        useParentDepth: true,
-                      },
-                    ]
-                  }
-                ]
-              },
-              {
-                pos: [-3.5, -9], // Upper front leg
-                z: 1.8,
-                radius: 1,
-                split: true,
-                children: [
-                  {
-                    pos: [-3.6, -4.6], // Lower front leg
-                    z: 2,
-                    radius: 0.5,
-                    children: [
-                      {
-                        pos: [-3.6, -1.8], // Front hoof
-                        z: 2,
-                        radius: 0.5,
-                        shapes: [
-                          {
-                            points: [
-                              [-3.1, -1.8],
-                              [-3.1, 0],
-                              [-4.5, 0],
-                              [-4.1, -1.8],
-                            ],
-                            color: "#b44",
-                            front: {
-                              points: [
-                                [-3.1, -1.8],
-                                [-3.1, 0],
-                                [-4.1, 0],
-                                [-4.1, -1.8],
-                              ]
-                            },
-                            back: {
-                              points: [
-                                [-3.1, -1.8],
-                                [-3.1, 0],
-                                [-4.1, 0],
-                                [-4.1, -1.8],
-                              ]
-                            },
-                          }
-                        ]
-                      }
-                    ]
-                  }
-                ]
-              },
-              {
-                pos: [-3.5, -9], // Upper front leg
-                z: -1.8,
-                radius: 1,
-                split: true,
-                children: [
-                  {
-                    pos: [-3.6, -4.6], // Lower front leg
-                    z: -2,
-                    radius: 0.5,
-                    children: [
-                      {
-                        pos: [-3.6, -1.8], // Front hoof
-                        z: -2,
-                        radius: 0.5,
-                        shapes: [
-                          {
-                            points: [
-                              [-3.1, -1.8],
-                              [-3.1, 0],
-                              [-4.5, 0],
-                              [-4.1, -1.8],
-                            ],
-                            color: "#b44",
-                            front: {
-                              points: [
-                                [-3.1, -1.8],
-                                [-3.1, 0],
-                                [-4.1, 0],
-                                [-4.1, -1.8],
-                              ]
-                            },
-                            back: {
-                              points: [
-                                [-3.1, -1.8],
-                                [-3.1, 0],
-                                [-4.1, 0],
-                                [-4.1, -1.8],
-                              ]
-                            },
-                          }
-                        ]
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      },
-      {
-        pos: [7, -10.2], // Upper back leg
-        z: 1.2,
-        radius: 1.8,
-        split: true,
-        children: [
-          {
-            pos: [9, -5.8], // Lower back leg
-            z: 2.4,
-            radius: 0.6,
-            children: [
-              {
-                pos: [9, -1.8], // Back hoof
-                z: 2.5,
-                radius: 0.5,
-                shapes: [
-                  {
-                    points: [
-                      [9.5, -1.8],
-                      [9.5, 0],
-                      [8.1, 0],
-                      [8.5, -1.8],
-                    ],
-                    color: "#b44",
-                    front: {
-                      points: [
-                        [9.5, -1.8],
-                        [9.5, 0],
-                        [8.5, 0],
-                        [8.5, -1.8],
-                      ]
-                    },
-                    back: {
-                      points: [
-                        [9.5, -1.8],
-                        [9.5, 0],
-                        [8.5, 0],
-                        [8.5, -1.8],
-                      ]
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      },
-      {
-        pos: [7, -10.2], // Upper back leg
-        z: -1.2,
-        radius: 1.8,
-        split: true,
-        children: [
-          {
-            pos: [9, -5.8], // Lower back leg
-            z: -2.4,
-            radius: 0.6,
-            children: [
-              {
-                pos: [9, -1.8], // Back hoof
-                z: -2.5,
-                radius: 0.5,
-                shapes: [
-                  {
-                    points: [
-                      [9.5, -1.8],
-                      [9.5, 0],
-                      [8.1, 0],
-                      [8.5, -1.8],
-                    ],
-                    color: "#b44",
-                    front: {
-                      points: [
-                        [9.5, -1.8],
-                        [9.5, 0],
-                        [8.5, 0],
-                        [8.5, -1.8],
-                      ]
-                    },
-                    back: {
-                      points: [
-                        [9.5, -1.8],
-                        [9.5, 0],
-                        [8.5, 0],
-                        [8.5, -1.8],
-                      ]
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      },
-      { // Tail
-        pos: [8.5, -13.2],
-        z: 0,
-        radius: 0.5,
-        color: '#ff0',
-        split: true,
-        children: [
-          {
-            pos: [8.9, -13.5],
-            z: 0,
-            radius: 0.6,
-            children: [
-              {
-                pos: [9.3, -13.2],
-                z: 0,
-                radius: 0.7,
-                children: [
-                  {
-                    pos: [10.5, -9.5],
-                    z: 0,
-                    radius: 0.7,
-                    children: [
-                      {
-                        pos: [11.5, -8],
-                        z: 0,
-                        radius: 0.2,
-                      }
-                    ],
-                  }
-                ],
-              }
-            ],
-          }
-        ],
-      }
-    ]
-  };
-  const animations: AnimationFrames[] = [
-    {}, // Base pose
-    {   // Staing still
-      4: [
-        {
-          angle: 0.025,
-          duration: 0.5,
-          easing: 6
-        },
-        {
-          angle: -0.025,
-          duration: 0.5,
-          easing: 6
-        },
-      ]
-    },
-    {   // Walking
-      4: [
-        {
-          angle: 0.025,
-          duration: 0.5,
-          easing: 6
-        },
-        {
-          angle: -0.025,
-          duration: 0.5,
-          easing: 6
-        },
-      ],
-      34: [
-        {
-          angle: 0.1,
-          duration: 0.5,
-          easing: 6
-        },
-        {
-          angle: -0.1,
-          duration: 0.5,
-          easing: 6
-        },
-      ],
-      35: [
-        {
-          angle: 0,
-          duration: 0.3,
-          easing: 0
-        },
-        {
-          angle: 0,
-          duration: 0.4,
-          easing: 6
-        },
-        {
-          angle: -0.5,
-          duration: 0.3,
-          easing: 6
-        },
-      ],
-      37: [
-        {
-          angle: -0.1,
-          duration: 0.5,
-          easing: 6
-        },
-        {
-          angle: 0.1,
-          duration: 0.5,
-          easing: 6
-        },
-      ],
-      38: [
-        {
-          angle: -0.25,
-          duration: 0.2,
-          easing: 5
-        },
-        {
-          angle: -0.5,
-          duration: 0.3,
-          easing: 6
-        },
-        {
-          angle: 0,
-          duration: 0.3,
-          easing: 0
-        },
-        {
-          angle: 0,
-          duration: 0.2,
-          easing: 4
-        },
-      ],
-      40: [
-        {
-          angle: 0.075,
-          duration: 0.2,
-          easing: 5
-        },
-        {
-          angle: 0.15,
-          duration: 0.5,
-          easing: 6
-        },
-        {
-          angle: -0.05,
-          duration: 0.3,
-          easing: 4
-        },
-      ],
-      41: [
-        {
-          angle: 0,
-          duration: 0.2,
-          easing: 5
-        },
-        {
-          angle: 0.1,
-          duration: 0.5,
-          easing: 6
-        },
-        {
-          angle: -0.15,
-          duration: 0.3,
-          easing: 4
-        },
-      ],
-      43: [
-        {
-          angle: 0.025,
-          duration: 0.2,
-          easing: 5
-        },
-        {
-          angle: -0.05,
-          duration: 0.5,
-          easing: 6
-        },
-        {
-          angle: 0.15,
-          duration: 0.3,
-          easing: 4
-        },
-      ],
-      44: [
-        {
-          angle: 0,
-          duration: 0.2,
-          easing: 5
-        },
-        {
-          angle: -0.15,
-          duration: 0.3,
-          easing: 6
-        },
-        {
-          angle: 0.1,
-          duration: 0.5,
-          easing: 4
-        },
-      ],
-      46: [
-        {
-          angle: 0.05,
-          duration: 0.5,
-          easing: 6
-        },
-        {
-          angle: -0.05,
-          duration: 0.5,
-          easing: 6
-        },
-      ],
-    },
-    {   // Running
-      4: [
-        {
-          angle: 0.15,
-          duration: 0.5,
-          easing: 6
-        },
-        {
-          angle: 0.05,
-          duration: 0.5,
-          easing: 6
-        },
-      ],
-      34: [
-        {
-          angle: 0.36,
-          duration: 0.5,
-          easing: 6
-        },
-        {
-          angle: -0.1,
-          duration: 0.5,
-          easing: 6
-        },
-      ],
-      35: [
-        {
-          angle: -0.2,
-          duration: 0.2,
-          easing: 5
-        },
-        {
-          angle: 0,
-          duration: 0.5,
-          easing: 6
-        },
-        {
-          angle: -0.5,
-          duration: 0.3,
-          easing: 4
-        },
-      ],
-      37: [
-        {
-          angle: 0.1,
-          duration: 0.25,
-          easing: 5
-        },
-        {
-          angle: -0.1,
-          duration: 0.5,
-          easing: 6
-        },
-        {
-          angle: 0.36,
-          duration: 0.25,
-          easing: 4
-        },
-      ],
-      38: [
-        {
-          angle: -0.1,
-          duration: 0.4,
-          easing: 5
-        },
-        {
-          angle: -0.5,
-          duration: 0.5,
-          easing: 6
-        },
-        {
-          angle: 0,
-          duration: 0.1,
-          easing: 4
-        },
-      ],
-      40: [
-        {
-          angle: 0.1,
-          duration: 0.375,
-          easing: 5
-        },
-        {
-          angle: -0.2,
-          duration: 0.5,
-          easing: 6
-        },
-        {
-          angle: 0.2,
-          duration: 0.125,
-          easing: 4
-        },
-      ],
-      41: [
-        {
-          angle: 0,
-          duration: 0.3,
-          easing: 5
-        },
-        {
-          angle: -0.1,
-          duration: 0.5,
-          easing: 6
-        },
-        {
-          angle: 0.2,
-          duration: 0.2,
-          easing: 4
-        },
-      ],
-      43: [
-        {
-          angle: -0.1,
-          duration: 0.125,
-          easing: 5
-        },
-        {
-          angle: -0.2,
-          duration: 0.5,
-          easing: 6
-        },
-        {
-          angle: 0.2,
-          duration: 0.375,
-          easing: 4
-        },
-      ],
-      44: [
-        {
-          angle: -0.084,
-          duration: 0.05,
-          easing: 5
-        },
-        {
-          angle: -0.1,
-          duration: 0.5,
-          easing: 6
-        },
-        {
-          angle: 0.2,
-          duration: 0.45,
-          easing: 4
-        },
-      ],
-      47: [
-        {
-          angle: -0.2,
-          duration: 0.5,
-          easing: 6
-        },
-        {
-          angle: -0.3,
-          duration: 0.5,
-          easing: 6
-        },
-      ],
-    },
-  ];
-
-  const scale = 18;
-  const offsetX = canvas.width * 0.5;
-  const offsetY = canvas.height * 1;
-
-  function toScreen(point: [number, number]): [number, number] {
-    return [offsetX + (point[0] * scale), offsetY + (point[1] * scale)];
-  }
-
-  function drawCircle(x: number, y: number, radius: number, color: string) {
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.moveTo(x + radius, y);
-    ctx.arc(x, y, radius, 0, kTau);
-    ctx.fill();
-  }
-
-  function drawBone(
-    ax: number,
-    ay: number,
-    ar: number,
-    bx: number,
-    by: number,
-    br: number,
-    color: string,
-  ) {
-    const dx = bx - ax;
-    const dy = by - ay;
-    const len = mathHypot(dx, dy);
-
-    if (len < 1e-6) {
-      drawCircle(ax, ay, mathMax(ar, br), color);
-      return;
-    }
-
-    // Sweep circles along the segment with interpolated radius to create a smooth taper.
-    const avgRadius = (ar + br) * 0.5;
-    const spacing = mathMax(0.75, avgRadius * 0.35);
-    const steps = mathMax(1, mathCeil(len / spacing));
-
-    for (let i = 0; i <= steps; ++i) {
-      const t = i / steps;
-      const cx = ax + (dx * t);
-      const cy = ay + (dy * t);
-      const cr = ar + ((br - ar) * t);
-
-      drawCircle(cx, cy, cr, color);
-    }
-  }
-
-  function drawSortedShape(shapeNode: Extract<TransformedSkeletonPart, { type: 1 }>, defaultColor: string) {
-    const shape = shapeNode.points;
-    if (!shape || shape.length < 3) return;
-
-    ctx.fillStyle = shapeNode.color ?? defaultColor;
-    ctx.beginPath();
-
-    for (let i = 0; i < shape.length; ++i) {
-      const [px, py] = shape[i];
-      const [sx, sy] = toScreen([px, py]);
-
-      if (i === 0) {
-        ctx.moveTo(sx, sy);
+        outputColor = (fogValue > 0)
+          ? blendAbgr(terrainPixels[terrainTextureIdx], renderState.mSkyColor, fogValue)
+          : terrainPixels[terrainTextureIdx];
       } else {
-        ctx.lineTo(sx, sy);
-      }
-    }
-
-    ctx.closePath();
-    ctx.fill();
-  }
-
-  function drawSkeleton(nodeSet: TransformedSkeletonPart[], defaultColor = "#454545") {
-    const transformedPosByNode = new Map<SkeletonNode, [number, number]>();
-    for (const transformedNode of nodeSet) {
-      if (transformedNode.type === 0) {
-        transformedPosByNode.set(transformedNode.ref, transformedNode.pos);
-      }
-    }
-
-    for (const transformedNode of nodeSet) {
-      if (transformedNode.type === 1) {
-        drawSortedShape(transformedNode, defaultColor);
-        continue;
+        outputColor = (fogValue > 0)
+          ? blendAbgr(renderState.mGroundColor, renderState.mSkyColor, fogValue)
+          : renderState.mGroundColor;
       }
 
-      const node = transformedNode.ref;
-      const parent = transformedNode.parent;
-      const nodeColor = transformedNode.color || defaultColor;
-
-      const [x, y] = toScreen(transformedNode.pos);
-      const radius = node.radius * scale;
-
-      if (parent && !node.split) {
-        const parentPos = transformedPosByNode.get(parent) ?? parent.pos;
-        const [px, py] = toScreen(parentPos);
-        drawBone(px, py, parent.radius * scale, x, y, radius, nodeColor);
+      if (cloudsPixels && renderState.mCloudsHeight > 0) {
+        const cloudsLocalX = cloudsT * sx;
+        const cloudsWorldX = (camYawCos * cloudsLocalX) - (camYawSin * cloudsLocalY) + renderState.mCloudsOffset.x;
+        const cloudsWorldY = (camYawSin * cloudsLocalX) + (camYawCos * cloudsLocalY) + renderState.mCloudsOffset.y;
+        const cloudsTexX = (camera.mPos.x + cloudsWorldX) | 0;
+        const cloudsTexY = (camera.mPos.y + cloudsWorldY) | 0;
+        const cloudsRowOffset = (cloudsTexY & cloudsMask) * cloudsRowStride;
+        const cloudsTextureIdx = cloudsRowOffset + (cloudsTexX & cloudsMask);
+        const cloudsFogged = (fogValue > 0)
+          ? blendAbgr(cloudsPixels[cloudsTextureIdx], renderState.mSkyColor, fogValue)
+          : cloudsPixels[cloudsTextureIdx];
+        
+        outputColor = overAbgr(cloudsFogged, outputColor);
       }
-
-      // Always draw the joint circle so branches/splits merge as a solid silhouette.
-      drawCircle(x, y, radius, nodeColor);
-
-      // Shapes are drawn as type-1 entries from the sorted set.
-    }
-  }
-
-  function sortNode(
-    node: SkeletonNode,
-    parent: SkeletonNode | null,
-    partId: number,
-    parentAnimAngle: number,
-    nodeSet: TransformedSkeletonPart[],
-    inheritedColor = "#454545",
-    parentBindPos: [number, number] = [0, 0],
-    parentAnimatedPos: [number, number] = [0, 0],
-  ) {
-    function getAnimationStep(partId: number, animIdx: number, time: number) {
-      const anim = animations[animIdx];
-      if (!anim) return 0;
-
-      const partAnim = anim[partId];
-      if (!partAnim || partAnim.length === 0) return 0;
-      if (partAnim.length === 1) return partAnim[0].angle;
-
-      let totalDuration = 0;
-      for (const keyframe of partAnim) {
-        totalDuration += mathMax(0, keyframe.duration);
-      }
-
-      if (totalDuration <= 0) {
-        return partAnim[0].angle;
-      }
-
-      const wrappedTime = ((time % totalDuration) + totalDuration) % totalDuration;
-      let elapsed = 0;
-
-      for (let i = 0; i < partAnim.length; ++i) {
-        const current = partAnim[i];
-        const next = partAnim[(i + 1) % partAnim.length];
-        const segmentDuration = mathMax(0, current.duration);
-
-        if (segmentDuration === 0) {
-          continue;
-        }
-
-        const segmentEnd = elapsed + segmentDuration;
-        if (wrappedTime < segmentEnd || i === partAnim.length - 1) {
-          const t = (wrappedTime - elapsed) / segmentDuration;
-          const easingIdx = mathClamp(current.easing | 0, 0, easingFunctions.length - 1);
-          const easingFn = easingFunctions[easingIdx] ?? easingFunctions[0];
-          const easedT = easingFn(mathClamp(t, 0, 1));
-          return current.angle + ((next.angle - current.angle) * easedT);
-        }
-
-        elapsed = segmentEnd;
-      }
-
-      return partAnim[partAnim.length - 1].angle;
-    }
-
-    const animAngle = getAnimationStep(partId, 0, animationTime) + parentAnimAngle;
-    const animSin = mathSin(animAngle * mathJs.PI);
-    const animCos = mathCos(animAngle * mathJs.PI);
-
-    const rotSin = mathSin(racerRotation);
-    const rotCos = mathCos(racerRotation);
-
-    function applyAnimationTransform(x: number, y: number) {
-      const localX = x - parentBindPos[0];
-      const localY = y - parentBindPos[1];
-
-      return {
-        x: (localX * animCos) - (localY * animSin) + parentAnimatedPos[0],
-        y: (localX * animSin) + (localY * animCos) + parentAnimatedPos[1],
-      };
-    }
-
-    function applyYawTransform(x: number, y: number, z: number) {
-      const animated = applyAnimationTransform(x, y);
-      const animX = animated.x;
-      const animY = animated.y;
-      const smoothSignX = animX / mathSqrt((animX * animX) + 0.25);
       
-      // Pseudo-3D yaw: collapse x by cos, offset x by depth, and shift y by signed x.
-      const transformedX = (animX * rotCos) - (z * rotSin);
-      const transformedY = animY + (rotSin * kVerticalFactor * smoothSignX);
-      const transformedZ = (z * rotCos) + (animX * rotSin);
-
-      return {
-        x: transformedX,
-        y: transformedY,
-        z: transformedZ,
-      };
-    }
-
-    function insertSorted(nodeItem: TransformedSkeletonPart) {
-      let insertIdx = nodeSet.length;
-      for (let i = 0; i < nodeSet.length; ++i) {
-        if (nodeItem.z < nodeSet[i].z) {
-          insertIdx = i;
-          break;
-        }
+      if (trackPixels) {
+        const texX = mathClamp((camera.mPos.x + worldX) | 0, 0, trackRowStride);
+        const texY = mathClamp((camera.mPos.y + worldY) | 0, 0, trackRowStride);
+        
+        const rowOffset = texY * trackRowStride;
+        const textureIdx = rowOffset + texX;
+        const trackColor = textureIdx < trackPixels.length ? trackPixels[textureIdx] : 0;
+        const trackFogged = (fogValue > 0)
+          ? blendAbgr(trackColor, renderState.mSkyColor, fogValue)
+          : trackColor;
+        
+        outputColor = overAbgr(trackFogged, outputColor);
       }
 
-      nodeSet.splice(insertIdx, 0, nodeItem);
+      const outputIdx = (width * outputRow) + i;
+      planePixels[outputIdx] = outputColor;
     }
-
-    const nodeColor = node.color ?? inheritedColor;
-    const animatedCenter = applyAnimationTransform(node.pos[0], node.pos[1]);
-    const transformedCenter = applyYawTransform(node.pos[0], node.pos[1], node.z);
-    const transformedNode: TransformedSkeletonPart = {
-      type: 0,
-      pos: [transformedCenter.x, transformedCenter.y],
-      z: transformedCenter.z + node.radius + (node.depthOffset ?? 0),
-      color: nodeColor,
-      ref: node,
-      parent: parent,
-    };
-
-    insertSorted(transformedNode);
-
-    for (const shape of node.shapes ?? []) {
-      const baseShapeZ = node.z + (shape.z ?? 0);
-      const transformedShapeOrigin = applyYawTransform(node.pos[0], node.pos[1], baseShapeZ);
-      const defaultPoints: [number, number][] = shape.points.map(([px, py]) => {
-        const rotatedPoint = applyYawTransform(px, py, baseShapeZ);
-        return [rotatedPoint.x, rotatedPoint.y];
-      });
-
-      let transformedPoints = defaultPoints;
-      let transformedShapeZ = transformedShapeOrigin.z;
-
-      const morphValue = mathMax(-1, mathMin(1, rotSin));
-      const target = (morphValue >= 0) ? shape.back : shape.front;
-      const morphAmount = mathAbs(morphValue);
-
-      if (target && target.points.length === shape.points.length && morphAmount > 0) {
-        const targetOrigin = applyYawTransform(node.pos[0], node.pos[1], node.z);
-        targetOrigin.z += (target.z ?? 0);
-
-        // Front/back targets are billboarded: preserve local XY offsets in screen space.
-        const billboardTargetPoints: [number, number][] = target.points.map(([px, py]) => [
-          targetOrigin.x + (px - node.pos[0]),
-          targetOrigin.y + (py - node.pos[1]),
-        ]);
-
-        transformedPoints = defaultPoints.map((point, idx) => {
-          const targetPoint = billboardTargetPoints[idx];
-          return [
-            point[0] + ((targetPoint[0] - point[0]) * morphAmount),
-            point[1] + ((targetPoint[1] - point[1]) * morphAmount),
-          ];
-        });
-
-        transformedShapeZ = transformedShapeOrigin.z + ((targetOrigin.z - transformedShapeOrigin.z) * morphAmount);
-      }
-
-      const transformedShape: TransformedSkeletonPart = {
-        color: nodeColor,
-        ...shape,
-        points: transformedPoints,
-        type: 1,
-        z: shape.useParentDepth ? transformedNode.z : transformedShapeZ,
-      };
-      insertSorted(transformedShape);
-    }
-
-    for (const child of node.children ?? []) {
-      partId = sortNode(
-        child,
-        node,
-        partId + 1,
-        animAngle,
-        nodeSet,
-        nodeColor,
-        node.pos,
-        [animatedCenter.x, animatedCenter.y],
-      );
-    }
-
-    return partId;
   }
 
-  function getSortedNodes(skeleton: SkeletonNode) {
-    const nodeSet: TransformedSkeletonPart[] = [];
-
-    sortNode(skeleton, null, 0, 0, nodeSet);
-
-    return nodeSet;
-  }
-
-  ctx.save();
-  ctx.globalCompositeOperation = "source-over";
-  drawSkeleton(getSortedNodes(skeleton));
-  // let xoff = 0;
-  // let yoff = 0;
-
-  // Torso
-  // ctx.moveTo(85 + xoff, 104 + yoff);
-  // ctx.bezierCurveTo(102 + xoff, 118 + yoff, 150 + xoff, 122 + yoff, 165 + xoff, 122 + yoff);
-  // ctx.bezierCurveTo(195 + xoff, 122 + yoff, 263 + xoff, 110 + yoff, 281 + xoff, 105 + yoff);
-  // ctx.bezierCurveTo(295 + xoff, 101 + yoff, 334 + xoff, 90 + yoff, 357 + xoff, 91 + yoff);
-  // ctx.bezierCurveTo(379 + xoff, 92 + yoff, 408 + xoff, 110 + yoff, 413 + xoff, 125 + yoff);
-  // ctx.bezierCurveTo(419 + xoff, 144 + yoff, 414 + xoff, 165 + yoff, 404 + xoff, 184 + yoff);
-  // ctx.bezierCurveTo(397 + xoff, 197 + yoff, 351 + xoff, 219 + yoff, 327 + xoff, 224 + yoff);
-  // ctx.bezierCurveTo(301 + xoff, 229 + yoff, 257 + xoff, 250 + yoff, 232 + xoff, 261 + yoff);
-  // ctx.bezierCurveTo(213 + xoff, 269 + yoff, 173 + xoff, 277 + yoff, 142 + xoff, 271 + yoff);
-  // ctx.bezierCurveTo(117 + xoff, 266 + yoff, 87 + xoff, 251 + yoff, 77 + xoff, 240 + yoff);
-  // ctx.bezierCurveTo(67 + xoff, 229 + yoff, 51 + xoff, 209 + yoff, 46 + xoff, 196 + yoff);
-  // ctx.bezierCurveTo(41 + xoff, 182 + yoff, 32 + xoff, 145 + yoff, 36 + xoff, 125 + yoff);
-  // ctx.fill();
-
-  // Upper back leg
-  // Start a new path so the second fill does not affect the first shape.
-  // xoff = 210;
-  // yoff = 60;
-  // ctx.beginPath();
-  // ctx.fillStyle = '#f00';
-  // ctx.moveTo(118 + xoff, 116 + yoff);
-  // ctx.bezierCurveTo(115 + xoff, 132 + yoff, 125 + xoff, 158 + yoff, 135 + xoff, 184 + yoff);
-  // ctx.bezierCurveTo(140 + xoff, 198 + yoff, 152 + xoff, 218 + yoff, 162 + xoff, 230 + yoff);
-  // ctx.bezierCurveTo(172 + xoff, 242 + yoff, 185 + xoff, 254 + yoff, 197 + xoff, 263 + yoff);
-  // ctx.bezierCurveTo(209 + xoff, 272 + yoff, 230 + xoff, 268 + yoff, 230 + xoff, 263 + yoff);
-  // ctx.bezierCurveTo(231 + xoff, 250 + yoff, 224 + xoff, 230 + yoff, 218 + xoff, 219 + yoff);
-  // ctx.bezierCurveTo(211 + xoff, 206 + yoff, 206 + xoff, 183 + yoff, 205 + xoff, 162 + yoff);
-  // ctx.bezierCurveTo(204 + xoff, 147 + yoff, 205 + xoff, 123 + yoff, 205 + xoff, 111 + yoff);
-  // ctx.bezierCurveTo(205 + xoff, 95 + yoff, 183 + xoff, 83 + yoff, 167 + xoff, 76 + yoff);
-  // ctx.bezierCurveTo(153 + xoff, 70 + yoff, 135 + xoff, 80 + yoff, 125 + xoff, 93 + yoff);
-  // ctx.fill();
-
-  // Lower back leg
-  // xoff = 415;
-  // yoff = 310;
-  // ctx.beginPath();
-  // ctx.fillStyle = '#f88';
-  // ctx.lineTo(0 + xoff, 0 + yoff);
-  // ctx.lineTo(0 + xoff, 150 + yoff);
-  // ctx.lineTo(20 + xoff, 150 + yoff);
-  // ctx.lineTo(20 + xoff, 0 + yoff);
-  // ctx.fill();
-
-  ctx.restore();
+  projectedPlaneCtx.putImageData(planeImageData, 0, 0);
 }
 
-function renderRenderables<R extends Renderable>(camera: Camera, renderableCmd: RenderableCommand<R>) {
+const renderRenderables = <R extends Renderable>(camera: Camera, renderableCmd: RenderableCommand<R>) => {
   const sortedRenderables = workSortedRenderables as SortedRenderable<R>[];
   let renderableCount = 0;
+
+  const tanHalfVFov = mathTan(camera.mVerticalFov * 0.5);
+  const tanHalfHFov = tanHalfVFov * (canvas.width / canvas.height);
+  const halfWidth = canvas.width * 0.5;
+  const halfHeight = canvas.height * 0.5;
+  const yawSin = renderFrameCache.mCamAngleSin;
+  const yawCos = renderFrameCache.mCamAngleCos;
+  const pitchSin = renderFrameCache.mCamPitchSin;
+  const pitchCos = renderFrameCache.mCamPitchCos;
+  const focalY = halfHeight / tanHalfVFov;
 
   for (const renderable of renderableCmd.mRenderables) {
     const dx = renderable.mPos.x - camera.mPos.x;
     const dy = renderable.mPos.y - camera.mPos.y;
-    const yawSin = mathSin(camera.mAngle);
-    const yawCos = mathCos(camera.mAngle);
-    const tanHalfVFov = mathTan(kVerticalFov * 0.5);
-    const tanHalfHFov = tanHalfVFov * (canvas.width / canvas.height);
-    const halfWidth = canvas.width * 0.5;
-    const halfHeight = canvas.height * 0.5;
 
     const xCam = (yawCos * dx) + (yawSin * dy);
     const zBase = (-yawSin * dx) + (yawCos * dy);
-    const pitchSin = mathSin(camera.mPitch);
-    const pitchCos = mathCos(camera.mPitch);
     const yCam = (-camera.mHeight * pitchCos) - (zBase * pitchSin);
     const zCam = (-camera.mHeight * pitchSin) + (zBase * pitchCos);
     const zDepth = -zCam;
-    const safeZ = (zDepth > 1e-6) ? zDepth : 1e-6;
+    const safeZ = (zDepth > kMathEpsilon) ? zDepth : kMathEpsilon;
     const ndcX = xCam / (safeZ * tanHalfHFov);
     const ndcY = yCam / (safeZ * tanHalfVFov);
     const x = (ndcX * halfWidth) + halfWidth - 0.5;
@@ -1542,7 +337,6 @@ function renderRenderables<R extends Renderable>(camera: Camera, renderableCmd: 
     const camFromRacerAngle = mathAtan2(-dy, -dx);
     const relAngle = renderable.mAngle - camFromRacerAngle - kMathHalfPi;
     const angle = mathMod((relAngle + kMathPi), kMathTau) - kMathPi;
-    const focalY = halfHeight / tanHalfVFov;
     const scale = renderableCmd.mScale * focalY * invZ;
 
     const offscreenOffset = 12 * scale;
@@ -1553,10 +347,12 @@ function renderRenderables<R extends Renderable>(camera: Camera, renderableCmd: 
       continue;
     }
 
-    const groundDistance = mathHypot(dx, dy);
-    const groundInvZ = groundDistance / camera.mHeight;
-    const linearFogValue = mathClamp((groundInvZ * kFogFactor) - 1, 0, 1);
-    const fogAlpha = 1 - easeOutQuad(linearFogValue);
+    const sy = yCam / safeZ;
+    const rayZ = -pitchSin + (sy * pitchCos);
+    const fogValue = mathClamp(
+      (1 - mathAbs(rayZ / renderState.mFogDistance)) * renderState.mFogIntensity, 0, 1,
+    );
+    const fogAlpha = 1 - fogValue;
 
     if (zBase > -5 || fogAlpha < kMathEpsilon) {
       continue;
@@ -1614,3 +410,123 @@ function renderRenderables<R extends Renderable>(camera: Camera, renderableCmd: 
     );
   }
 }
+
+const renderUpdateTanTable = (size: number, tanHalfFov: number, outArray: number[]) => {
+  const halfSize = size / 2;
+
+  outArray.length = 0;
+  for (let n = 0; n < size; ++n) {
+    const ndc = ((n + 0.5) - halfSize) / halfSize;
+    outArray.push(ndc * tanHalfFov);
+  }
+};
+
+export const renderAssignPlanes = (
+  trackPixels: Uint32Array | null,
+  cloudsPixels: Uint32Array | null,
+  terrainPixels: Uint32Array | null,
+  trackWidth: number,
+  cloudsWidth: number,
+  terrainWidth: number,
+  skyCloudsHeight: number,
+  cloudsHeight: number,
+  terrainHeight: number
+) => {
+  renderState.mTrackPixels = trackPixels;
+  renderState.mCloudsPixels = cloudsPixels;
+  renderState.mTerrainPixels = terrainPixels;
+
+  renderState.mTrackWidth = trackWidth;
+  renderState.mCloudsWidth = cloudsWidth;
+  renderState.mTerrainWidth = terrainWidth;
+
+  renderState.mSkyCloudsHeight = skyCloudsHeight;
+  renderState.mCloudsHeight = cloudsHeight;
+  renderState.mTerrainHeight = terrainHeight;
+}
+
+export const renderSetFogValues = (distance: number, intensity: number) => {
+  renderState.mFogDistance = distance;
+  renderState.mFogIntensity = intensity;
+}
+
+export const renderSetColors = (skyColor: number, groundColor: number) => {
+  renderState.mSkyColor = skyColor;
+  renderState.mGroundColor = groundColor;
+}
+
+export const renderGetTerrainOffsetRef = () => renderState.mTerrainOffset;
+export const renderGetCloudsOffsetRef = () => renderState.mCloudsOffset;
+
+export const render = <R extends Renderable>(camera: Camera, renderableCmd: RenderableCommand<R>) => {
+  const canvasWidth = canvas.width;
+  const canvasHeight = canvas.height;
+  const canvasSizeChanged = 
+    canvasWidth !== renderState.mPrevCanvasWidth ||
+    canvasHeight !== renderState.mPrevCanvasHeight;
+  
+  if (
+    canvasSizeChanged || camera.mVerticalFov !== renderState.mPrevVerticalFov
+  ) {
+    const tanHalfVFov = mathTan(camera.mVerticalFov / 2);
+    const tanHalfHFov = tanHalfVFov * (canvasWidth / canvasHeight);
+
+    renderUpdateTanTable(canvasHeight, tanHalfVFov, renderState.mVerTanTable);
+    renderUpdateTanTable(canvasWidth, tanHalfHFov, renderState.mHorTanTable);
+
+    if (canvasSizeChanged) {
+      projectedPlaneCanvas.width = canvasWidth;
+      projectedPlaneCanvas.height = canvasHeight;
+
+      const newImageData = ctxGetCanvasImageData(projectedPlaneCtx, canvasWidth, canvasHeight);
+      planeImageData = newImageData.mImage;
+      planePixels = newImageData.mPixels;
+    }
+
+    renderState.mPrevCanvasWidth = canvasWidth;
+    renderState.mPrevCanvasHeight = canvasHeight;
+    renderState.mPrevVerticalFov = camera.mVerticalFov;
+  }
+
+  renderFrameCache.mCamAngleSin = mathSin(camera.mAngle);
+  renderFrameCache.mCamAngleCos = mathCos(camera.mAngle);
+  renderFrameCache.mCamPitchSin = mathSin(camera.mPitch);
+  renderFrameCache.mCamPitchCos = mathCos(camera.mPitch);
+
+  renderProjectedPlane(camera);
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(projectedPlaneCanvas, 0, 0);
+  
+  renderRenderables(camera, renderableCmd);
+}
+
+// const verTanTable = (() => {
+//   const halfHeight = canvas.height * 0.5;
+//   const tanHalfFov = mathTan(kVerticalFov * 0.5);
+//   const ret: number[] = [];
+
+//   for (let y = 0; y < canvas.height; ++y) {
+//     const ndcY = ((y + 0.5) - halfHeight) / halfHeight;
+//     ret.push(ndcY * tanHalfFov);
+//   }
+
+//   return ret;
+// })();
+// const horTanTable = (() => {
+//   const halfWidth = canvas.width * 0.5;
+//   const tanHalfVFov = mathTan(kVerticalFov * 0.5);
+//   const tanHalfHFov = tanHalfVFov * (canvas.width / canvas.height);
+//   const ret: number[] = [];
+
+//   for (let x = 0; x < canvas.width; ++x) {
+//     const ndcX = ((x + 0.5) - halfWidth) / halfWidth;
+//     ret.push(ndcX * tanHalfHFov);
+//   }
+
+//   return ret;
+// })();
+
+// let trackPixels: Uint32Array | null = null;
+// let cloudsPixels: Uint32Array | null = null;
+// let terrainPixels: Uint32Array | null = null;

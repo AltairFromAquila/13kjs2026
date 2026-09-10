@@ -1,20 +1,20 @@
 // Based on https://github.com/jobtalle/CubicNoise
 
-import { mathMod, mathSmoothstep, noiseBufferedCubicNoise, sampleCubicNoise } from "../math";
-import { createOffscreenCanvas } from "../sys/context";
+import { mathSmoothstep, noiseBufferedCubicNoise, sampleCubicNoise } from "../math";
+import { ctxCreateOffscreenCanvas, ctxGetCanvasImageData } from "../sys/context";
 
 const kBaseNoiseWidth = 16 as const;
 const kCloudsNoiseWidth = 512 as const;
 const kCloudsNoiseMask = kCloudsNoiseWidth - 1;
 
-// const cloudsCanvas: OffscreenCanvas = new OffscreenCanvas(kCloudsNoiseWidth, kCloudsNoiseWidth);
-// const cloudsCtx: OffscreenCanvasRenderingContext2D = cloudsCanvas.getContext('2d', { alpha: true })!;
 const {
-  offscreenCanvas: cloudsCanvas,
-  offscreenCtx: cloudsCtx
-} = createOffscreenCanvas(kCloudsNoiseWidth, kCloudsNoiseWidth, true, true);
-const cloudsImageData = cloudsCtx.getImageData(0, 0, kCloudsNoiseWidth, kCloudsNoiseWidth);
-const cloudsPixels = new Uint32Array(cloudsImageData.data.buffer);
+  mCanvas: cloudsCanvas,
+  mCtx: cloudsCtx,
+} = ctxCreateOffscreenCanvas(kCloudsNoiseWidth, kCloudsNoiseWidth, true, true);
+const {
+  mImage: cloudsImageData,
+  mPixels: cloudsPixels,
+} = ctxGetCanvasImageData(cloudsCtx, kCloudsNoiseWidth, kCloudsNoiseWidth);
 
 export function cloudsGenerate() {
   const baseNoise = noiseBufferedCubicNoise(kBaseNoiseWidth, kBaseNoiseWidth);

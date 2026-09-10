@@ -2,17 +2,7 @@
 // used under CC BY 4.0 / Modified from original.
 // Link to original: https://www.shadertoy.com/view/ltfGD7
 
-import { createOffscreenCanvas } from "../sys/context";
-
-const kWaterWidth = 512 as const;
-const kWaterMask = kWaterWidth - 1;
-
-const {
-  offscreenCanvas: waterCanvas,
-  offscreenCtx: waterCtx
-} = createOffscreenCanvas(kWaterWidth, kWaterWidth, false, true);
-const waterImageData = waterCtx.getImageData(0, 0, kWaterWidth, kWaterWidth);
-const waterPixels = new Uint32Array(waterImageData.data.buffer);
+import { ctxCreateOffscreenCanvas, ctxGetCanvasImageData } from "../sys/context";
 
 export type WaterColor = [number, number, number];
 
@@ -21,6 +11,18 @@ export interface WaterPalette {
   water2: WaterColor;
   foam: WaterColor;
 }
+
+const kWaterWidth = 512 as const;
+const kWaterMask = kWaterWidth - 1;
+
+const {
+  mCanvas: waterCanvas,
+  mCtx: waterCtx,
+} = ctxCreateOffscreenCanvas(kWaterWidth, kWaterWidth, false, true);
+const {
+  mImage: waterImageData,
+  mPixels: waterPixels,
+} = ctxGetCanvasImageData(waterCtx, kWaterWidth, kWaterWidth);
 
 // const kDefaultWaterPalette: WaterPalette = {
 //   water: [0, 114, 186],

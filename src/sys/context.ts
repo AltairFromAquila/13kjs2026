@@ -53,11 +53,26 @@ export const ctxGetRainbowGradient = (ctx: AnyCanvasRenderingContext2D, x0: numb
 
 export const ctxSetFillStyle = (ctx: AnyCanvasRenderingContext2D, color: string | CanvasGradient | CanvasPattern) => ctx.fillStyle = color;
 
-export function createOffscreenCanvas(width: number, height: number, alpha: boolean, read: boolean) {
+export const ctxCreateOffscreenCanvas = (width: number, height: number, alpha: boolean, read: boolean) => {
   const offscreenCanvas = new OffscreenCanvas(width, height);
   const offscreenCtx = offscreenCanvas.getContext('2d', { alpha, willReadFrequently: read })!;
-  return { offscreenCanvas, offscreenCtx };
+
+  return {
+    mCanvas: offscreenCanvas,
+    mCtx: offscreenCtx,
+  };
 }
+
+export const ctxGetCanvasImageData = (ctx: AnyCanvasRenderingContext2D, width: number, height: number) => {
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const pixels = new Uint32Array(imageData.data.buffer);
+
+  return {
+    mImage: imageData,
+    mPixels: pixels,
+  };
+}
+
 
 window.addEventListener('resize', onResize);
 onResize();
