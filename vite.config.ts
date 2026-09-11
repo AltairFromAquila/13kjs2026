@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite';
+import htmlMinifier from 'vite-plugin-html-minifier'
 
 export default defineConfig({
   build: {
@@ -29,7 +30,9 @@ export default defineConfig({
     // In Vite 8/Rolldown, this replaces inlineDynamicImports for single-chunk output.
     // codeSplitting: false,
   },
-  esbuild: {
-    // legalComments: 'none',
-  },
+  plugins: [
+    htmlMinifier({
+      minify: true,
+    }),
+  ],
 });
