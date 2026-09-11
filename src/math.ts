@@ -142,6 +142,15 @@ export const sampleCubicNoise = (x: number, y: number, values: Float32Array, wid
 
 //#endregion
 
+export const colorUnpack = (color: number) => ({
+  r: color & 255,
+  g: (color >> 8) & 255,
+  b: (color >> 16) & 255,
+  a: (color >> 24) & 255,
+});
+
+export const colorPack = (r: number, g: number, b: number, a: number) => ((a|0) << 24) | ((b|0) << 16) | ((g|0) << 8) | (r|0);
+
 export const vec2New = (x = 0, y = 0): Vec2 => ({ x, y });
 
 export const vec2NewCopy = (v: Vec2): Vec2 => ({ x: v.x, y: v.y });

@@ -1,4 +1,4 @@
-import { kMathEpsilon, kMathHalfPi, kMathPi, kMathTau, mathAbs, mathAtan2, mathClamp, mathCos, mathMax, mathMod, mathSin, mathTan, vec2New, type Vec2 } from "../math";
+import { colorPack, colorUnpack, kMathEpsilon, kMathHalfPi, kMathPi, kMathTau, mathAbs, mathAtan2, mathClamp, mathCos, mathMax, mathMod, mathSin, mathTan, vec2New, type Vec2 } from "../math";
 import type { Camera } from "../core/camera";
 import { canvas, ctxCreateOffscreenCanvas, ctx, ctxGetCanvasImageData } from "../sys/context";
 import type { Entity } from "./entity";
@@ -109,66 +109,59 @@ let {
 const blendAbgr = (src: number, dst: number, t: number): number => {
   const invT = 1 - t;
 
-  const srcR = src & 0xff;
-  const srcG = (src >>> 8) & 0xff;
-  const srcB = (src >>> 16) & 0xff;
-  const srcA = (src >>> 24) & 0xff;
+  const {
+    r: srcR,
+    g: srcG,
+    b: srcB,
+    a: srcA
+  } = colorUnpack(src);
+  const {
+    r: dstR,
+    g: dstG,
+    b: dstB,
+    a: dstA
+  } = colorUnpack(dst);
 
-  const dstR = dst & 0xff;
-  const dstG = (dst >>> 8) & 0xff;
-  const dstB = (dst >>> 16) & 0xff;
-  const dstA = (dst >>> 24) & 0xff;
-
-  const outR = ((srcR * invT) + (dstR * t)) | 0;
-  const outG = ((srcG * invT) + (dstG * t)) | 0;
-  const outB = ((srcB * invT) + (dstB * t)) | 0;
-  const outA = ((srcA * invT) + (dstA * t)) | 0;
-
-  return (outA << 24) | (outB << 16) | (outG << 8) | outR;
+  return colorPack(
+    (srcR * invT) + (dstR * t),
+    (srcG * invT) + (dstG * t),
+    (srcB * invT) + (dstB * t),
+    (srcA * invT) + (dstA * t)
+  );
 }
 
 const overAbgr = (top: number, bottom: number): number => {
-  const topA = (top >>> 24) & 0xff;
+  const {
+    r: topR,
+    g: topG,
+    b: topB,
+    a: topA
+  } = colorUnpack(top);
   if (topA === 0xff) return top;
   if (topA === 0) return bottom;
 
   const invTopA = 255 - topA;
-
-  const topR = top & 0xff;
-  const topG = (top >>> 8) & 0xff;
-  const topB = (top >>> 16) & 0xff;
-
-  const botR = bottom & 0xff;
-  const botG = (bottom >>> 8) & 0xff;
-  const botB = (bottom >>> 16) & 0xff;
-  const botA = (bottom >>> 24) & 0xff;
+  const {
+    r: botR,
+    g: botG,
+    b: botB,
+    a: botA
+  } = colorUnpack(bottom);
 
   const outR = ((topR * topA) + (botR * invTopA)) / 255;
   const outG = ((topG * topA) + (botG * invTopA)) / 255;
   const outB = ((topB * topA) + (botB * invTopA)) / 255;
   const outA = topA + ((botA * invTopA) / 255);
 
-  return (((outA | 0) & 0xff) << 24)
-    | (((outB | 0) & 0xff) << 16)
-    | (((outG | 0) & 0xff) << 8)
-    | ((outR | 0) & 0xff);
+  return colorPack(
+    outR & 255,
+    outG & 255,
+    outB & 255,
+    outA & 255,
+  );
 }
 
 const renderProjectedPlane = (camera: Camera) => {
-  // if (!trackPixels) {
-  //   const trackCanvas = a.textureCanvas as OffscreenCanvas;
-  //   const trackImage = a.textureCtx.getImageData(0, 0, trackCanvas.width, trackCanvas.height);
-
-  //   trackPixels = new Uint32Array(trackImage.data.buffer);
-  // }
-  // if (!cloudsPixels) {
-  //   cloudsPixels = cloudsGetPixels();
-  // }
-  // if (!terrainPixels) {
-  //   terrainPixels = terrainGetPixels();
-  //   // terrainPixels = waterGetPixels();
-  // }
-
   const width = canvas.width;
   const height = canvas.height;
 
@@ -500,33 +493,3 @@ export const render = <R extends Renderable>(camera: Camera, renderableCmd: Rend
   
   renderRenderables(camera, renderableCmd);
 }
-
-// const verTanTable = (() => {
-//   const halfHeight = canvas.height * 0.5;
-//   const tanHalfFov = mathTan(kVerticalFov * 0.5);
-//   const ret: number[] = [];
-
-//   for (let y = 0; y < canvas.height; ++y) {
-//     const ndcY = ((y + 0.5) - halfHeight) / halfHeight;
-//     ret.push(ndcY * tanHalfFov);
-//   }
-
-//   return ret;
-// })();
-// const horTanTable = (() => {
-//   const halfWidth = canvas.width * 0.5;
-//   const tanHalfVFov = mathTan(kVerticalFov * 0.5);
-//   const tanHalfHFov = tanHalfVFov * (canvas.width / canvas.height);
-//   const ret: number[] = [];
-
-//   for (let x = 0; x < canvas.width; ++x) {
-//     const ndcX = ((x + 0.5) - halfWidth) / halfWidth;
-//     ret.push(ndcX * tanHalfHFov);
-//   }
-
-//   return ret;
-// })();
-
-// let trackPixels: Uint32Array | null = null;
-// let cloudsPixels: Uint32Array | null = null;
-// let terrainPixels: Uint32Array | null = null;

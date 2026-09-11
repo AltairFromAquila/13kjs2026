@@ -1,11 +1,32 @@
-export type TrackRawData = {
-  mainPath: number[];
-  secondaryPaths?: { depthChanges: { [key: number]: number }; data: number[] }[];
+import { renderGetCloudsOffsetRef } from "../core/render";
+import { kCloudsNoiseWidth } from "../game/clouds";
+import { terrainGenerate } from "../game/terrain";
+import { waterGenerate } from "../game/water";
+import { colorUnpack, kMathTau, mathSin, type Vec2 } from "../math";
+
+export interface TrackRawData {
+  mMainPath: number[];
+  mSecondaryPaths?: { mDepthChanges: { [key: number]: number }; mData: number[] }[];
+  mMetadata: TrackMetadata;
+}
+
+// Name, SkyColor, TerrainData, TerrainHeight, CloudsHeight, SkyCloudsHeight, FogDistance, MovePlanesFunction
+export type TrackMetadata = [string, number, () => Uint32Array, number, number, number, number, (cloudsOffset: Vec2, terrainOffset: Vec2, delta: number) => void];
+
+const moveClouds = (cloudsOffset: Vec2, delta: number) => {
+  cloudsOffset.x = (cloudsOffset.x + (delta * 4)) % kCloudsNoiseWidth;
+  cloudsOffset.y = (cloudsOffset.y + (delta * 4)) % kCloudsNoiseWidth;
+};
+
+let waterOffsetValue = 0;
+const moveWater = (waterOffset: Vec2, delta: number) => {
+  waterOffsetValue = (waterOffsetValue + delta) % kMathTau;
+  waterOffset.x = mathSin(waterOffsetValue) * 5;
 }
 
 export const tracks: TrackRawData[] = [
   {
-    mainPath: [
+    mMainPath: [
       1014, 1006, 80,
       1020, 2000, 80,
       1496, 2414, 80,
@@ -13,32 +34,12 @@ export const tracks: TrackRawData[] = [
       2010, 990, 80,
       1510, 584, 80,
     ],
-    // [
-    //   // 48, 990, 60,
-    //   // 65, 1204, 60,
-    //   // 315, 1590, 60,
-    //   // 615, 1690, 60,
-    //   // 715, 1698, 60,
-    //   // 815, 1690, 60,
-    //   // 1115, 1590, 60,
-    //   // 1375, 1204, 60,
-    //   // 1390, 990, 60,
-    //   // 1390, 590, 60,
-    //   // 1375, 490, 60,
-    //   // 1115, 190, 60,
-    //   // 815, 90, 60,
-    //   // 715, 80, 60,
-    //   // 615, 90, 60,
-    //   // 315, 190, 60,
-    //   // 65, 490, 60,
-    //   // 50, 590, 60,
-    // ],
-    secondaryPaths: [
+    mSecondaryPaths: [
       {
-        depthChanges: {
+        mDepthChanges: {
           2: 1
         },
-        data: [
+        mData: [
           -1, 0,
           -1, 5,
           1130, 570, 80,
@@ -54,9 +55,25 @@ export const tracks: TrackRawData[] = [
       //   100, 120, 60,
       // ]
     ],
+    mMetadata: [
+      'Mistic Forest',
+      0xffbb55,
+      () => terrainGenerate(
+        [
+          { mHeight: 0, mColor: colorUnpack(0xff913c14) },
+          { mHeight: 1, mColor: colorUnpack(0xfff5c378) },
+          { mHeight: 2, mColor: colorUnpack(0xff90af68) },
+          { mHeight: 5, mColor: colorUnpack(0xff306022) },
+          { mHeight: 8, mColor: colorUnpack(0xff4e803f) },
+          { mHeight: 10, mColor: colorUnpack(0xff7ea771) }
+        ], 16
+      ),
+      7, 2, 5, 2,
+      (cloudsOffset: Vec2, _: Vec2, delta: number) => moveClouds(cloudsOffset, delta)
+    ]
   },
   {
-    mainPath: [
+    mMainPath: [
       2220, 440, 80,
       1373, 565, 80,
       1000, 1120, 80,
@@ -69,10 +86,21 @@ export const tracks: TrackRawData[] = [
       3550, 870, 70,
       3580, 620, 80,
       3246, 510, 80
-    ]
+    ],
+    mMetadata: [
+      'Atlantis',
+      0xffd56a,
+      () => waterGenerate(
+        colorUnpack(0xffddaa02),
+        colorUnpack(0xffb36f02),
+        colorUnpack(0xfff6f5cf)
+      ),
+      1, 0, 9, 2,
+      (cloudsOffset: Vec2, waterOffset: Vec2, delta: number) => (moveClouds(cloudsOffset, delta), moveWater(waterOffset, delta))
+    ],
   },
   {
-    mainPath: [
+    mMainPath: [
       1690, 1626, 80,
       1910, 1264, 80,
       1854, 640, 70,
@@ -95,10 +123,64 @@ export const tracks: TrackRawData[] = [
       736, 2340, 70,
       804, 2020, 80,
       1120, 1900, 80
+    ],
+    mMetadata: [
+      'Dunes #57ffd5', // rgb(231, 160, 5) rgb(250, 189, 23) rgb(250, 216, 23) rgb(253, 231, 32)
+      // 0x3daefa,
+      0xd6fc66,
+      () => terrainGenerate(
+        [
+          { mHeight: 0, mColor: colorUnpack(0xff05a0e7) },
+          { mHeight: 3, mColor: colorUnpack(0xff17bdfa) },
+          { mHeight: 7, mColor: colorUnpack(0xff17d8fa) },
+          { mHeight: 10, mColor: colorUnpack(0xff39eafd) }
+        ], 16
+      ),
+      3, 0, 0, 1,
+      () => {}
     ]
   },
   {
-    mainPath: [
+    mMainPath: [
+      2000, 630, 80,
+      2577, 650, 80,
+      2763, 733, 80,
+      2630, 904, 90,
+      2340, 1250, 100,
+      2424, 1526, 100,
+      2740, 1800, 90,
+      2888, 1940, 80,
+      2775, 2045, 80,
+      2250, 2090, 80,
+      1716, 2186, 80,
+      1780, 1880, 80,
+      2000, 1474, 80,
+      1754, 1153, 80,
+      1500, 1374, 80,
+      1428, 1723, 60,
+      1306, 1823, 60,
+      1210, 1700, 60,
+      1326, 1302, 60,
+      1524, 710, 80
+    ],
+    mMetadata: [
+      'Hills',
+      0xa3804b,
+      () => terrainGenerate(
+        [
+          { mHeight: 0, mColor: colorUnpack(0xff008600) },
+          { mHeight: 2, mColor: colorUnpack(0xff498d70) },
+          { mHeight: 4, mColor: colorUnpack(0xff669493) },
+          { mHeight: 8, mColor: colorUnpack(0xffaaaaaa) },
+          { mHeight: 10, mColor: colorUnpack(0xffffffff) }
+        ], 16
+      ),
+      9, 1, 0, 3,
+      (cloudsOffset: Vec2, _: Vec2, delta: number) => moveClouds(cloudsOffset, delta)
+    ]
+  },
+  {
+    mMainPath: [
       2260, 1716, 80,
       2750, 1220, 70,
       3195, 647, 70,
@@ -125,34 +207,23 @@ export const tracks: TrackRawData[] = [
       1320, 1000, 65,
       1330, 1270, 70,
       1560, 2235, 70
+    ],
+    mMetadata: [
+      'Cold Mist',
+      0xc382df,
+      () => terrainGenerate(
+        [
+          { mHeight: 0, mColor: colorUnpack(0xffffde96) },
+          { mHeight: 5, mColor: colorUnpack(0xffffa696) },
+          { mHeight: 10, mColor: colorUnpack(0xfffdb6db) }
+        ], 16
+      ),
+      6, 1, 4, 6,
+      (cloudsOffset: Vec2, _: Vec2, delta: number) => moveClouds(cloudsOffset, delta)
     ]
   },
   {
-    mainPath: [
-      2000, 630, 80,
-      2577, 650, 80,
-      2763, 733, 80,
-      2630, 904, 90,
-      2340, 1250, 100,
-      2424, 1526, 100,
-      2740, 1800, 90,
-      2888, 1940, 80,
-      2775, 2045, 80,
-      2250, 2090, 80,
-      1716, 2186, 80,
-      1780, 1880, 80,
-      2000, 1474, 80,
-      1754, 1153, 80,
-      1500, 1374, 80,
-      1428, 1723, 60,
-      1306, 1823, 60,
-      1210, 1700, 60,
-      1326, 1302, 60,
-      1524, 710, 80
-    ]
-  },
-  {
-    mainPath: [
+    mMainPath: [
       1890, 1616, 80,
       935, 1580, 70,
       715, 1423, 60,
@@ -188,6 +259,17 @@ export const tracks: TrackRawData[] = [
       680, 2030, 60,
       2180, 2013, 60,
       2380, 1710, 70
+    ],
+    mMetadata: [
+      "Dragon's Lair",
+      0x2545fd,
+      () => waterGenerate(
+        colorUnpack(0xff0202b2),
+        colorUnpack(0xff000080),
+        colorUnpack(0xff008ee8)
+      ),
+      2, 1, 3, 2,
+      (cloudsOffset: Vec2, waterOffset: Vec2, delta: number) => (moveClouds(cloudsOffset, delta), moveWater(waterOffset, delta))
     ]
   }
 ]

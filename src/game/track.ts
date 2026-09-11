@@ -64,37 +64,37 @@ export const trackGetTrackWidthAt = (self: Track, pathIdx: number, segmentIdx: n
 
 export function trackLoadData(self: Track, data: TrackRawData) {
   const mainPath: SplinePoint[] = [];
-  for (let i = 0; i < data.mainPath.length; i += 3) {
+  for (let i = 0; i < data.mMainPath.length; i += 3) {
     mainPath.push({
-      x: data.mainPath[i],
-      y: data.mainPath[i + 1],
+      x: data.mMainPath[i],
+      y: data.mMainPath[i + 1],
       tension: 0,
-      width: data.mainPath[i + 2],
+      width: data.mMainPath[i + 2],
     });
   }
   
   const secondaryPaths: SecondaryPathData[] = [];
-  for (const pathData of data.secondaryPaths ?? []) {
+  for (const pathData of data.mSecondaryPaths ?? []) {
     const path: SplinePoint[] = [];
-    for (let i = 4; i < pathData.data.length; i += 3) {
+    for (let i = 4; i < pathData.mData.length; i += 3) {
       path.push({
-        x: pathData.data[i],
-        y: pathData.data[i + 1],
+        x: pathData.mData[i],
+        y: pathData.mData[i + 1],
         tension: 0,
-        width: pathData.data[i + 2],
+        width: pathData.mData[i + 2],
       });
     }
     secondaryPaths.push({
       branchInPath: {
-        path: pathData.data[0],
-        point: pathData.data[1],
+        path: pathData.mData[0],
+        point: pathData.mData[1],
       },
       branchOffPath: {
-        path: pathData.data[2],
-        point: pathData.data[3],
+        path: pathData.mData[2],
+        point: pathData.mData[3],
       },
       path: path,
-      depthChanges: pathData.depthChanges,
+      depthChanges: pathData.mDepthChanges,
     });
   }
 

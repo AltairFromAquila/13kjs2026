@@ -1,16 +1,16 @@
-import { render, renderAssignPlanes, renderSetColors, type RenderableCommand } from "./core/render";
+import { render, renderAssignPlanes, renderGetCloudsOffsetRef, renderGetTerrainOffsetRef, renderSetColors, renderSetFogValues, type RenderableCommand } from "./core/render";
 import { racerDataGetSkeleton, racerDataGetSkeletonShapes } from "./data/racer.data";
-import { tracks } from "./data/track.data";
-import { cloudsGenerate, cloudsGetPixels } from "./game/clouds";
+import { tracks, type TrackMetadata } from "./data/track.data";
+import { cloudsGenerate, cloudsGetPixels, kCloudsNoiseWidth } from "./game/clouds";
 import { racerFixedTick, racerNew, racerRender, racerSetAngleFromVector, racerSetupTrackPoints, racerTick, type Racer } from "./game/racer";
 import { Track, trackDrawTexture, trackGetStartPositions, trackLoadData } from "./game/track";
-import { mathCeil, mathJs, mathMin, mathTan, vec2Add, vec2Copy, vec2MulScalar, vec2New } from "./math";
+import { mathCeil, mathMin, mathTan, vec2Add, vec2Copy, vec2MulScalar, vec2New } from "./math";
 import { cameraFreeCamNew, cameraSetupFreeCamEvents, cameraHandleFreeCamInput, type FreeCamera, cameraGameCamNew, cameraGameCamTick, type GameCamera } from "./game/camera";
 import { kVerticalFov, type Camera } from "./core/camera";
 import { renderGameUI } from "./game/game-ui";
 import { controllerProcessPlayerInput, controllerSetupPlayerInput } from "./game/controllers";
 import { collisionActivateEntity } from "./game/collision";
-import { terrainGenerateHills, terrainGetPixels } from "./game/terrain";
+import { kTerrainWidth, terrainGenerate, terrainGetPixels } from "./game/terrain";
 import { waterGenerate } from "./game/water";
 import { ctxGetCanvasImageData } from "./sys/context";
 
@@ -22,6 +22,7 @@ export interface Game {
 
   // TODO: Refactor later
   mTrack: Track;
+  mTrackMetadata: TrackMetadata;
   mRacers: Racer[];
 
   mCamera: Camera;
@@ -33,6 +34,7 @@ export const Game: Game = {
   mProcess: processWithFixed,
   mAccTime: 0,
   mTrack: new Track(),
+  mTrackMetadata: tracks[0].mMetadata,
   mRacers: [
     racerNew(
       racerDataGetSkeleton('#faa', '#000', '#b44', '#ff7', '#ff0'),
@@ -77,22 +79,25 @@ export const Game: Game = {
 }
 
 export const gameInit = () => {
-  trackLoadData(Game.mTrack, tracks[5]);
+  const track = tracks[5];
+
+  trackLoadData(Game.mTrack, track);
   trackDrawTexture(Game.mTrack);
   cloudsGenerate();
-  terrainGenerateHills();
-  waterGenerate();
+
+  Game.mTrackMetadata = track.mMetadata;
 
   const trackImageData = ctxGetCanvasImageData(Game.mTrack.textureCtx, Game.mTrack.textureCanvas.width, Game.mTrack.textureCanvas.height);
 
   renderAssignPlanes(
     trackImageData.mPixels,
     cloudsGetPixels(),
-    terrainGetPixels(),
-    Game.mTrack.textureCanvas.width, 512, 512,
-    0, 25, 100
+    track.mMetadata[2](),
+    Game.mTrack.textureCanvas.width, kCloudsNoiseWidth, kTerrainWidth,
+    track.mMetadata[5] * 30, track.mMetadata[4] * 30, track.mMetadata[3] * 30
   );
-  renderSetColors(0xffbb55, 0xff00cc30);
+  renderSetColors(track.mMetadata[1], 0xff00cc30);
+  renderSetFogValues(track.mMetadata[6] / 10, 1.1);
   
   const racersCount = Game.mRacers.length;
   const startRows = 2;
@@ -142,6 +147,13 @@ function processDefault(self: Game, delta: number) {
   for (const racer of self.mRacers) {
     racerTick(racer, delta);
   }
+
+  self.mTrackMetadata[7](
+    renderGetCloudsOffsetRef(),
+    renderGetTerrainOffsetRef(),
+    delta
+  );
+
   cameraGameCamTick(self.mCamera as GameCamera, delta);
   // cameraHandleFreeCamInput(self.mCamera as FreeCamera, delta);
   render(self.mCamera, self.mRenderRacerCmd);

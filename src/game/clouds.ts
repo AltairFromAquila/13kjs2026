@@ -3,8 +3,8 @@
 import { mathSmoothstep, noiseBufferedCubicNoise, sampleCubicNoise } from "../math";
 import { ctxCreateOffscreenCanvas, ctxGetCanvasImageData } from "../sys/context";
 
+export const kCloudsNoiseWidth = 512 as const;
 const kBaseNoiseWidth = 16 as const;
-const kCloudsNoiseWidth = 512 as const;
 const kCloudsNoiseMask = kCloudsNoiseWidth - 1;
 
 const {

@@ -1,8 +1,12 @@
-import { mathClamp, noiseBufferedCubicNoise, sampleCubicNoise } from "../math";
+import { colorPack, colorUnpack, mathClamp, noiseBufferedCubicNoise, sampleCubicNoise } from "../math";
 import { ctxCreateOffscreenCanvas, ctxGetCanvasImageData } from "../sys/context";
 
-const kBaseNoiseWidth = 16 as const;
-const kTerrainWidth = 512 as const;
+export type TerrainColorStops = {
+  mHeight: number,
+  mColor: { r: number; g: number; b: number; };
+}[];
+
+export const kTerrainWidth = 512 as const;
 const kTerrainMask = kTerrainWidth - 1;
 
 const {
@@ -14,45 +18,32 @@ const {
   mPixels: terrainPixels,
 } = ctxGetCanvasImageData(terrainCtx, kTerrainWidth, kTerrainWidth);
 
-// Fertile lands
-const kTerrainColorStops: { height: number; color: [number, number, number]; }[] = [
-  { height: 0.0, color: [20, 60, 145] },
-  { height: 0.12, color: [120, 195, 245] },
-  { height: 0.20, color: [104, 175, 96] },
-  { height: 0.48, color: [34, 96, 48] },
-  { height: 0.85, color: [142, 142, 142] },
-  { height: 1.0, color: [255, 255, 255] }
-];
-// Dunes
-// const kTerrainColorStops: { height: number; color: [number, number, number]; }[] = [
-//   { height: 0.0, color: [231, 160, 5] },
-//   { height: 0.25, color: [250, 189, 23] },
-//   { height: 0.85, color: [250, 216, 23] },
-//   { height: 1.0, color: [253, 231, 32] }
-// ];
-
-const terrainSampleGradient = (height: number) => {
+const terrainSampleGradient = (colorData: TerrainColorStops, height: number) => {
   const h = mathClamp(height, 0, 1);
 
-  for (let i = 1; i < kTerrainColorStops.length; ++i) {
-    const low = kTerrainColorStops[i - 1];
-    const high = kTerrainColorStops[i];
+  for (let i = 1; i < colorData.length; ++i) {
+    const low = colorData[i - 1];
+    const high = colorData[i];
+    const lowColor = low.mColor;
+    const highColor = high.mColor;
+    const lowHeight = low.mHeight / 10;
+    const highHeight = high.mHeight / 10;
 
-    if (h <= high.height) {
-      const denom = high.height - low.height;
-      const t = denom <= 0 ? 0 : (h - low.height) / denom;
-      const r = (low.color[0] + ((high.color[0] - low.color[0]) * t)) | 0;
-      const g = (low.color[1] + ((high.color[1] - low.color[1]) * t)) | 0;
-      const b = (low.color[2] + ((high.color[2] - low.color[2]) * t)) | 0;
-      return [r, g, b] as const;
+    if (h <= highHeight) {
+      const denom = highHeight - lowHeight;
+      const t = denom <= 0 ? 0 : (h - lowHeight) / denom;
+      const r = (lowColor.r + ((highColor.r - lowColor.r) * t)) | 0;
+      const g = (lowColor.g + ((highColor.g - lowColor.g) * t)) | 0;
+      const b = (lowColor.b + ((highColor.b - lowColor.b) * t)) | 0;
+      return { r, g, b } as const;
     }
   }
 
-  return kTerrainColorStops[kTerrainColorStops.length - 1].color;
+  return colorData[colorData.length - 1].mColor;
 };
 
-export const terrainGenerateHills = () => {
-  const baseNoise = noiseBufferedCubicNoise(kBaseNoiseWidth, kBaseNoiseWidth);
+export const terrainGenerate = (colorData: TerrainColorStops, baseNoiseValue: number) => {
+  const baseNoise = noiseBufferedCubicNoise(baseNoiseValue, baseNoiseValue);
 
   for (let y = 0; y < kTerrainWidth; ++y) {
     for (let x = 0; x < kTerrainWidth; ++x) {
@@ -65,9 +56,9 @@ export const terrainGenerateHills = () => {
       let amplitudeSum = 0;
 
       for (let octave = 0; octave < 8; ++octave) {
-        const sampleX = u * kBaseNoiseWidth * frequency;
-        const sampleY = v * kBaseNoiseWidth * frequency;
-        total += sampleCubicNoise(sampleX, sampleY, baseNoise, kBaseNoiseWidth, kBaseNoiseWidth) * amplitude;
+        const sampleX = u * baseNoiseValue * frequency;
+        const sampleY = v * baseNoiseValue * frequency;
+        total += sampleCubicNoise(sampleX, sampleY, baseNoise, baseNoiseValue, baseNoiseValue) * amplitude;
         amplitudeSum += amplitude;
 
         frequency *= 2;
@@ -76,10 +67,10 @@ export const terrainGenerateHills = () => {
 
       const fbm = total / amplitudeSum;
       const height = mathClamp((fbm - 0.24) / 0.64, 0, 1);
-      const color = terrainSampleGradient(height);
+      const color = terrainSampleGradient(colorData, height);
 
       // ABGR packing: A in high byte, then B, G, R.
-      terrainPixels[(y * kTerrainWidth) + x] = (255 << 24) | (color[2] << 16) | (color[1] << 8) | color[0];
+      terrainPixels[(y * kTerrainWidth) + x] = colorPack(color.r, color.g, color.b, 255);
     }
   }
 
@@ -90,6 +81,7 @@ export const terrainGenerateHills = () => {
   }
 
   terrainCtx.putImageData(terrainImageData, 0, 0);
+  return terrainPixels;
 }
 
 export const terrainGetCanvas = () => {
