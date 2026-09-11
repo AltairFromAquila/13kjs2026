@@ -19,33 +19,9 @@ export const renderGameUI = (delta: number) => {
   const width = ctx.canvas.width;
   const height = ctx.canvas.height;
   const speed = vec2Length(Game.mRacers[0].mVel) * 0.42;
-
-  const playerLap = Game.mRacers[0].mLap;
-  const playerSegmentIdx = Game.mRacers[0].mTrackPoints[-1]?.mSegmentIdx ?? 0;
-  const playerSegmentT = Game.mRacers[0].mTrackPoints[-1]?.t ?? 0;
   
-  let playerPosition = 1;
-  let leaderRacer = Game.mRacers[1];
-  for (let i = 1; i < Game.mRacers.length; ++i) {
-    const racer = Game.mRacers[i];
-    const racerLap = racer.mLap;
-    const racerSegmentIdx = racer.mTrackPoints[-1]?.mSegmentIdx ?? 0;
-    const racerSegmentT = racer.mTrackPoints[-1]?.t ?? 0;
-
-    if (racerLap > playerLap ||
-        (racerLap === playerLap && racerSegmentIdx > playerSegmentIdx) ||
-        (racerLap === playerLap && racerSegmentIdx === playerSegmentIdx && racerSegmentT > playerSegmentT)) {
-      playerPosition += 1;
-    }
-    
-    const leaderLap = leaderRacer.mLap;
-    const leaderSegmentIdx = leaderRacer.mTrackPoints[-1]?.mSegmentIdx ?? 0;
-    if (racerLap > leaderRacer.mLap ||
-        (racerLap === leaderLap && racerSegmentIdx > leaderSegmentIdx) ||
-        (racerLap === leaderLap && racerSegmentIdx === leaderSegmentIdx && racerSegmentT > (leaderRacer.mTrackPoints[-1]?.t ?? 0))) {
-      leaderRacer = racer;
-    }
-  }
+  const playerPosition = Game.mRacersOrdered.indexOf(Game.mRacers[0]) + 1;
+  const leaderRacer = (playerPosition > 1) ? Game.mRacersOrdered[0] : Game.mRacersOrdered[1];
 
   const scale = (height > 720) ? 1.5 : 1;
 

@@ -40,6 +40,7 @@ export interface Renderable extends Entity {
 export interface RenderableCommand<R extends Renderable> {
   mRenderables: R[];
   mScale: number;
+  mAlpha: number;
   mCommand: (self: R, ctx: CanvasRenderingContext2D, x: number, y: number, invZ: number, angle: number, scale: number, alpha: number) => void;
 }
 
@@ -399,7 +400,7 @@ const renderRenderables = <R extends Renderable>(camera: Camera, renderableCmd: 
       item.mInvZ,
       item.mAngle,
       item.mScale,
-      item.mAlpha,
+      item.mAlpha * renderableCmd.mAlpha,
     );
   }
 }

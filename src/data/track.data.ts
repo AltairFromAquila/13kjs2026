@@ -262,7 +262,7 @@ export const tracks: TrackRawData[] = [
     ],
     mMetadata: [
       "Dragon's Lair",
-      0x2545fd,
+      0x2337a5,
       () => waterGenerate(
         colorUnpack(0xff0202b2),
         colorUnpack(0xff000080),

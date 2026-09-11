@@ -4,35 +4,122 @@ import { tracks, type TrackMetadata } from "./data/track.data";
 import { cloudsGenerate, cloudsGetPixels, kCloudsNoiseWidth } from "./game/clouds";
 import { racerFixedTick, racerNew, racerRender, racerSetAngleFromVector, racerSetupTrackPoints, racerTick, type Racer } from "./game/racer";
 import { Track, trackDrawTexture, trackGetStartPositions, trackLoadData } from "./game/track";
-import { mathCeil, mathMin, mathTan, vec2Add, vec2Copy, vec2MulScalar, vec2New } from "./math";
-import { cameraFreeCamNew, cameraSetupFreeCamEvents, cameraHandleFreeCamInput, type FreeCamera, cameraGameCamNew, cameraGameCamTick, type GameCamera } from "./game/camera";
+import { mathCeil, mathLerp, mathMin, mathRandom, mathTan, vec2Add, vec2Copy, vec2MulScalar, vec2New } from "./math";
+import { cameraFreeCamNew, cameraSetupFreeCamEvents, cameraHandleFreeCamInput, type FreeCamera, cameraGameCamNew, cameraGameCamTick, type GameCamera, cameraGameCamSetupIntro } from "./game/camera";
 import { kVerticalFov, type Camera } from "./core/camera";
 import { renderGameUI } from "./game/game-ui";
-import { controllerProcessPlayerInput, controllerSetupPlayerInput } from "./game/controllers";
+import { controllerProcessAIForRacer, controllerProcessPlayerInput, controllerSetupPlayerInput } from "./game/controllers";
 import { collisionActivateEntity } from "./game/collision";
-import { kTerrainWidth, terrainGenerate, terrainGetPixels } from "./game/terrain";
-import { waterGenerate } from "./game/water";
+import { kTerrainWidth } from "./game/terrain";
 import { ctxGetCanvasImageData } from "./sys/context";
 
 const kTargetTickTime = 1/120;
+
+export const kGameModeRaceIntro = 0;
+export const kGameModeRaceRacing = 1;
+export const kGameModeRaceResults = 2;
+export const kGameModeRaceFinalResult = 3;
+export const kGameModeRaceMenu = 4;
 
 export interface Game {
   mProcess: (self: Game, delta: number) => void;
   mAccTime: number;
 
+  mGameMode: number;
+  mSequenceTimer: number;
+
   // TODO: Refactor later
   mTrack: Track;
   mTrackMetadata: TrackMetadata;
   mRacers: Racer[];
+  mRacersOrdered: Racer[];
 
   mCamera: Camera;
 
   mRenderRacerCmd: RenderableCommand<Racer>;
 }
 
+const processDefault = (self: Game, delta: number) => {
+  for (const racer of self.mRacers) {
+    racerTick(racer, delta);
+  }
+
+  self.mTrackMetadata[7](
+    renderGetCloudsOffsetRef(),
+    renderGetTerrainOffsetRef(),
+    delta
+  );
+
+  if (self.mGameMode === kGameModeRaceIntro) {
+    self.mSequenceTimer += delta;
+
+    if (self.mSequenceTimer > 9 && mathRandom() < 0.1) {
+      self.mGameMode = kGameModeRaceRacing;
+      self.mProcess = processWithFixed;
+    } if (self.mSequenceTimer > 5) {
+      self.mRenderRacerCmd.mAlpha = mathLerp(0, 1, mathMin(self.mSequenceTimer - 5, 1));
+    }
+  } else if (self.mGameMode === kGameModeRaceFinalResult) {
+    self.mSequenceTimer += delta;
+
+    if (self.mSequenceTimer > 1) {
+      self.mProcess = processDefault;
+    }
+  } else if (self.mGameMode === kGameModeRaceRacing) {
+    self.mRacersOrdered.sort((a, b) => {
+      if (a.mLapTracker !== b.mLapTracker) {
+        return b.mLapTracker - a.mLapTracker;
+      }
+
+      const aMainTrackPoint = a.mTrackPoints[-1];
+      const bMainTrackPoint = b.mTrackPoints[-1];
+      const aSegmentIdx = aMainTrackPoint.mSegmentIdx;
+      const bSegmentIdx = bMainTrackPoint.mSegmentIdx;
+
+      if (aSegmentIdx !== bSegmentIdx) {
+        return bSegmentIdx - aSegmentIdx;
+      }
+
+      const aT = aMainTrackPoint.t;
+      const bT = bMainTrackPoint.t;
+
+      if (aT !== bT) {
+        return bT - aT;
+      }
+
+      return self.mRacers.indexOf(a) - self.mRacers.indexOf(b);
+    });
+
+    if (self.mRacers[0].mLap > 3) {
+      self.mGameMode = kGameModeRaceResults;
+      Game.mRacers[0].mController.mProcessFunction = controllerProcessAIForRacer;
+    }
+  }
+
+  cameraGameCamTick(self.mCamera as GameCamera, delta);
+  // cameraHandleFreeCamInput(self.mCamera as FreeCamera, delta);
+  render(self.mCamera, self.mRenderRacerCmd);
+  renderGameUI(delta);
+}
+
+const processWithFixed = (self: Game, delta: number) => {
+  self.mAccTime = mathMin(self.mAccTime + delta, 5);
+  if (self.mAccTime > kTargetTickTime) {
+    for (; self.mAccTime > 0; self.mAccTime -= kTargetTickTime) {
+      for (const racer of self.mRacers) {
+        racerFixedTick(racer, kTargetTickTime);
+      }
+    }
+  }
+
+  processDefault(self, delta);
+}
+
 export const Game: Game = {
-  mProcess: processWithFixed,
+  mProcess: processDefault,
   mAccTime: 0,
+  mGameMode: kGameModeRaceIntro,
+  mSequenceTimer: 0,
   mTrack: new Track(),
   mTrackMetadata: tracks[0].mMetadata,
   mRacers: [
@@ -69,17 +156,19 @@ export const Game: Game = {
       racerDataGetSkeletonShapes('#444', '#000')
     ),
   ],
+  mRacersOrdered: [],
   mCamera: cameraGameCamNew(),
   // mCamera: cameraFreeCamNew(),
   mRenderRacerCmd: {
     mRenderables: [],
     mScale: 440 / ((900 * 0.5) / mathTan(kVerticalFov * 0.5)),
+    mAlpha: 0,
     mCommand: racerRender,
   }
 }
 
 export const gameInit = () => {
-  const track = tracks[5];
+  const track = tracks[3];
 
   trackLoadData(Game.mTrack, track);
   trackDrawTexture(Game.mTrack);
@@ -126,6 +215,7 @@ export const gameInit = () => {
       racerSetupTrackPoints(racer, pos);
 
       Game.mRenderRacerCmd.mRenderables.push(racer);
+      Game.mRacersOrdered.push(racer);
       collisionActivateEntity(racer);
 
       widthFactor += racerDistance;
@@ -133,42 +223,14 @@ export const gameInit = () => {
   }
 
   (Game.mCamera as GameCamera).mTarget = Game.mRacers[0];
-  Game.mRacers[0].mController.mProcessFunction = controllerProcessPlayerInput;
 
+  Game.mRacers[0].mController.mProcessFunction = controllerProcessPlayerInput;
   controllerSetupPlayerInput(Game.mRacers[0].mController);
 
   // cameraSetupFreeCamEvents(Game.mCamera as FreeCamera);
 
+  cameraGameCamSetupIntro(Game.mCamera as GameCamera);
+
   console.log(Game.mRacers[0].mPos);
   console.log(Game.mRacers[0].mAngle);
-}
-
-function processDefault(self: Game, delta: number) {
-  for (const racer of self.mRacers) {
-    racerTick(racer, delta);
-  }
-
-  self.mTrackMetadata[7](
-    renderGetCloudsOffsetRef(),
-    renderGetTerrainOffsetRef(),
-    delta
-  );
-
-  cameraGameCamTick(self.mCamera as GameCamera, delta);
-  // cameraHandleFreeCamInput(self.mCamera as FreeCamera, delta);
-  render(self.mCamera, self.mRenderRacerCmd);
-  renderGameUI(delta);
-}
-
-function processWithFixed(self: Game, delta: number) {
-  self.mAccTime = mathMin(self.mAccTime + delta, 5);
-  if (self.mAccTime > kTargetTickTime) {
-    for (; self.mAccTime > 0; self.mAccTime -= kTargetTickTime) {
-      for (const racer of self.mRacers) {
-        racerFixedTick(racer, kTargetTickTime);
-      }
-    }
-  }
-
-  processDefault(self, delta);
 }

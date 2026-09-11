@@ -1,5 +1,8 @@
 import { kVerticalFov, type Camera } from "../core/camera";
+import { easeOutQuad } from "../easing";
+import { Game, kGameModeRaceFinalResult, kGameModeRaceIntro, kGameModeRaceResults } from "../game";
 import { mathJs, mathSin, mathCos, type Vec2, kMathTau, mathMod, vec2New, kMathHalfPi, mathLerp, mathLerpAngle, mathMax, mathMin, mathClamp } from "../math";
+import { kTrackTextureSize } from "./track";
 
 export interface GameCamera extends Camera {
   mAngleOffset: number;
@@ -38,18 +41,50 @@ export const cameraGameCamNew = (): GameCamera => ({
   mHeight: 32,
   mVerticalFov: kVerticalFov,
   mAngleOffset: 0,
-  mTarget: null as any, // Will be set later
+  mTarget: 0 as any, // Will be set later
 });
 
+export const cameraGameCamSetupIntro = (self: GameCamera) => {
+  self.mAngle = 0;
+  self.mAngleOffset = 0;
+  self.mPitch = kMathHalfPi;
+  self.mHeight = 3000;
+
+  self.mPos.x = self.mPos.y = kTrackTextureSize / 2;
+}
+
 export const cameraGameCamTick = (self: GameCamera, delta: number) => {
-  self.mAngle = mathLerpAngle(self.mTarget.mAngle + self.mAngleOffset, self.mAngle - kMathHalfPi, 0.92);
+  if (Game.mGameMode === kGameModeRaceIntro) {
+    if (Game.mSequenceTimer > 4) {
+      const ratio = easeOutQuad(mathMin(Game.mSequenceTimer - 4, 1));
 
-  // Slightly offset the camera position to avoid animation issue (I might fix the animation issue later, but for now this is a quick fix)
-  // The bug is related to the racer mirroring the animation when turning, which causes the camera to jitter when following the racer.
-  self.mPos.x = self.mTarget.mPos.x - kGameCamTargetOffset * mathCos(self.mAngle);
-  self.mPos.y = self.mTarget.mPos.y - kGameCamTargetOffset * mathSin(self.mAngle);
+      self.mPitch = mathLerp(kMathHalfPi, 0.4, ratio);
+      self.mHeight = mathLerp(3000, 32, ratio);
+    } else if (Game.mSequenceTimer > 3) {
+      const ratio = mathMin(Game.mSequenceTimer - 3, 1);
 
-  self.mAngle += kMathHalfPi;
+      self.mAngle = mathLerpAngle(self.mAngle - kMathHalfPi, self.mTarget.mAngle, ratio);
+      self.mPos.x = mathLerp(self.mPos.x, self.mTarget.mPos.x - kGameCamTargetOffset * mathCos(self.mAngle), ratio);
+      self.mPos.y = mathLerp(self.mPos.y, self.mTarget.mPos.y - kGameCamTargetOffset * mathSin(self.mAngle), ratio);
+
+      self.mAngle += kMathHalfPi;
+    }
+  } else {
+    if (Game.mGameMode === kGameModeRaceResults) {
+      self.mAngleOffset = (self.mAngleOffset + (delta / 4)) % kMathTau;
+    } else if (Game.mGameMode === kGameModeRaceFinalResult) {
+      const ratio = easeOutQuad(mathMin(Game.mSequenceTimer, 1));
+
+      self.mPitch = mathLerp(0.4, -0.6, ratio);
+    }
+
+    self.mAngle = mathLerpAngle(self.mTarget.mAngle + self.mAngleOffset, self.mAngle - kMathHalfPi, 0.92);
+
+    self.mPos.x = self.mTarget.mPos.x - kGameCamTargetOffset * mathCos(self.mAngle);
+    self.mPos.y = self.mTarget.mPos.y - kGameCamTargetOffset * mathSin(self.mAngle);
+
+    self.mAngle += kMathHalfPi;
+  }
 };
 
 export const cameraFreeCamNew = (): FreeCamera => ({

@@ -38,11 +38,13 @@ export interface TrackFindPointResult {
   mainPathProjection: TrackPointProjection | null;
 }
 
+export const kTrackTextureSize = 4096;
+
 export class Track {
   segments: SplineSegment[] = [];
   secondaryPaths: SecondaryPath[] = [];
 
-  textureCanvas: OffscreenCanvas = new OffscreenCanvas(2048 * 2, 2048 * 2);
+  textureCanvas: OffscreenCanvas = new OffscreenCanvas(kTrackTextureSize, kTrackTextureSize);
   textureCtx: OffscreenCanvasRenderingContext2D = this.textureCanvas.getContext('2d', { willReadFrequently: true })!;
 }
 
