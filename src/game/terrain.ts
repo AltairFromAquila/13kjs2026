@@ -15,7 +15,7 @@ const {
 const {
   mImage: terrainImageData,
   mPixels: terrainPixels,
-} = ctxGetCanvasImageData(terrainCtx, kTerrainWidth, kTerrainWidth);
+} = ctxGetCanvasImageData(kTerrainWidth, kTerrainWidth, terrainCtx);
 
 const terrainSampleGradient = (colorData: TerrainColorStops, height: number) => {
   const h = mathClamp(height, 0, 1);

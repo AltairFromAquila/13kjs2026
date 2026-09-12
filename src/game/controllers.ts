@@ -1,6 +1,6 @@
 import { Game } from "../game";
 import { kMathEpsilon, mathAbs, mathAtan2, mathClamp, mathCos, mathLerpAngle, mathMax, mathMin, mathRandom, mathSin, splineCalculateSegmentPoint, splineCalculateSegmentTangent, vec2Add, vec2Copy, vec2Distance, vec2DistanceSqr, vec2Dot, vec2LengthSqr, vec2Lerp, vec2MulScalar, vec2New, vec2NewCopy, vec2Normalize, vec2Sub, type Vec2 } from "../math";
-import { windowAddEventListener, windowRemoveEventListener } from "../sys/window";
+import { kWindowEventKeyDown, kWindowEventKeyUp, windowAddEventListener, windowRemoveEventListener } from "../sys/window";
 import type { Racer } from "./racer";
 import { trackGetTrackWidthAt, trackWrapSegmentIndex } from "./track";
 
@@ -228,21 +228,21 @@ export const controllerSetupPlayerInput = (self: Controller) => {
     }
   };
 
-  playerInputState.mEventListeners['keydown'] = onKeyDown;
-  playerInputState.mEventListeners['keyup'] = onKeyUp;
+  playerInputState.mEventListeners[kWindowEventKeyDown] = onKeyDown;
+  playerInputState.mEventListeners[kWindowEventKeyUp] = onKeyUp;
 
-  windowAddEventListener('keydown', onKeyDown);
-  windowAddEventListener('keyup', onKeyUp);
+  windowAddEventListener(kWindowEventKeyDown, onKeyDown);
+  windowAddEventListener(kWindowEventKeyUp, onKeyUp);
 };
 
 export const controllerRemovePlayerInput = () => {
-  if (playerInputState.mEventListeners['keydown']) {
-    windowRemoveEventListener('keydown', playerInputState.mEventListeners['keydown']);
-    playerInputState.mEventListeners['keydown'] = 0;
+  if (playerInputState.mEventListeners[kWindowEventKeyDown]) {
+    windowRemoveEventListener(kWindowEventKeyDown, playerInputState.mEventListeners[kWindowEventKeyDown]);
+    playerInputState.mEventListeners[kWindowEventKeyDown] = 0;
   }
-  if (playerInputState.mEventListeners['keyup']) {
-    windowRemoveEventListener('keyup', playerInputState.mEventListeners['keyup']);
-    playerInputState.mEventListeners['keyup'] = 0;
+  if (playerInputState.mEventListeners[kWindowEventKeyUp]) {
+    windowRemoveEventListener(kWindowEventKeyUp, playerInputState.mEventListeners[kWindowEventKeyUp]);
+    playerInputState.mEventListeners[kWindowEventKeyUp] = 0;
   }
 };
 

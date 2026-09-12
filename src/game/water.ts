@@ -23,7 +23,7 @@ const {
 const {
   mImage: waterImageData,
   mPixels: waterPixels,
-} = ctxGetCanvasImageData(waterCtx, kWaterWidth, kWaterWidth);
+} = ctxGetCanvasImageData(kWaterWidth, kWaterWidth, waterCtx);
 
 const kCircleData = (() => {
   const bytesRaw = atob("+zVvNN4mEChTOPYk4TYPO/MlITmQOQkifyMRLasnBTdQNmcnRzsGO0on9jR+OZQibjtGMskjnSnyOuAm8DQ9MiEgmTUyN8EgwSmhO+wliS8HOL8jgjjXM3wniTijOwYhRSpuMpMkjjgAOccixjSwOdwhBjssOpwa1TAFNm0YqS9WOGEiCTm7NBYlWjVDNMokWDu/O68kuTsKOIAeHjjsOmMerzlQKZwatjmeOIUl/jmdNqwh+yssOwwm2DuVN98dLjk8OdUkNjnaO0gf3TYeNqYnfjoBOXAZajbvOfwcTTWyNiAeKDs2LMkfMziUOEMj6DZKO3UlRDlJOxISHjjJM+4mYyYMNH0gBTiQNwEmjDnnNlAmpDYTO/UmxTCYNhcdRTguO6oePSmsOuYkHDkrOUclSDm7O3sdHDiNMNQc9S8nOcgU/TusOH8hKTt3M9Ue4jN2OTcc4Cw6MXkjmDtsOiohrzdKMqQhLTtuOicjsDQbOs0dXy6EL3QgCzbfGnceDThAOGAjijYoOz8mmDDQOkkcxy3RMZMhPzpQNt4cxTQBOaka/TK3OXAWRTkbMaAY5juwMGInIDMHNI8THTE5ODMe");

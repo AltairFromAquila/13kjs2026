@@ -1,5 +1,5 @@
 import type { TrackRawData } from "../data/track.data";
-import { splineCalculateCatmullRom, splineCalculateSegmentPoint, splineCalculateSegmentTangent, mathLerp, mathJs, vec2Add, vec2Dot, vec2MulScalar, vec2New, vec2NewCopy, vec2Normalize, vec2Sub, type SplinePoint, type SplineSegment, type Vec2, mathMod, vec2Copy, vec2LengthSqr, mathAbs, mathMax, mathSqrt } from "../math";
+import { splineCalculateCatmullRom, splineCalculateSegmentPoint, splineCalculateSegmentTangent, mathLerp, vec2Add, vec2Dot, vec2MulScalar, vec2New, vec2NewCopy, vec2Normalize, vec2Sub, type SplinePoint, type SplineSegment, type Vec2, mathMod, vec2Copy, vec2LengthSqr, mathAbs, mathMax, mathSqrt } from "../math";
 import { ctxBeginPath, ctxClosePathAndFill, ctxGetRainbowGradient, ctxLineTo, ctxMoveTo, ctxSetFillStyle } from "../sys/context";
 
 interface TrackData {
@@ -237,15 +237,15 @@ export function trackDrawTexture(self: Track) {
     const gradLeft = vec2Add(vec2MulScalar(vec2NewCopy(midNormal), midHalfWidth), midPos);
     const gradRight = vec2Add(vec2MulScalar(vec2NewCopy(midNormal), -midHalfWidth), midPos);
 
-    const gradient = ctxGetRainbowGradient(ctx, gradLeft.x, gradLeft.y, gradRight.x, gradRight.y, '8');
+    const gradient = ctxGetRainbowGradient(gradLeft.x, gradLeft.y, gradRight.x, gradRight.y, '8', ctx);
 
-    ctxSetFillStyle(ctx, gradient);
+    ctxSetFillStyle(gradient, ctx);
     ctx.strokeStyle = gradient;
     ctxBeginPath(ctx);
-    ctxMoveTo(ctx, curLeft.x, curLeft.y);
-    ctxLineTo(ctx, nextLeft.x, nextLeft.y);
-    ctxLineTo(ctx, nextRight.x, nextRight.y);
-    ctxLineTo(ctx, curRight.x, curRight.y);
+    ctxMoveTo(curLeft.x, curLeft.y, ctx);
+    ctxLineTo(nextLeft.x, nextLeft.y, ctx);
+    ctxLineTo(nextRight.x, nextRight.y, ctx);
+    ctxLineTo(curRight.x, curRight.y, ctx);
     ctxClosePathAndFill(ctx);
     ctx.stroke();
   }
@@ -290,10 +290,10 @@ export function trackDrawTexture(self: Track) {
 
       ctx.fillStyle = ((x + y) & 1) ? '#000' : '#fff';
       ctxBeginPath(ctx);
-      ctxMoveTo(ctx, p0.x, p0.y);
-      ctxLineTo(ctx, p1.x, p1.y);
-      ctxLineTo(ctx, p2.x, p2.y);
-      ctxLineTo(ctx, p3.x, p3.y);
+      ctxMoveTo(p0.x, p0.y, ctx);
+      ctxLineTo(p1.x, p1.y, ctx);
+      ctxLineTo(p2.x, p2.y, ctx);
+      ctxLineTo(p3.x, p3.y, ctx);
       ctxClosePathAndFill(ctx);
     }
   }

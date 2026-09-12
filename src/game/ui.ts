@@ -1,8 +1,8 @@
 import { racerData } from "../data/racer.data";
 import { Game, gameGoToFinal, gameGoToMenu, gameGoToTrack, gameStartGame, kGameModeRaceFinalResult, kGameModeRaceIntro, kGameModeRaceResults } from "../game";
 import { kMathPi, kMathTau, mathClamp, mathFloor, mathLerp, mathMax, mathMin, mathMod, mathRandom, numberToString, vec2Length } from "../math";
-import { ctx, ctxBeginPath, ctxClosePathAndFill, ctxFillText, ctxGetRainbowGradient, ctxLineTo, ctxMoveTo, ctxSetFillStyle, ctxSetTextAlign } from "../sys/context";
-import { windowAddEventListener, windowRemoveEventListener } from "../sys/window";
+import { ctx, ctxBeginPath, ctxClosePathAndFill, ctxFillText, ctxGetRainbowGradient, ctxLineTo, ctxMoveTo, ctxSetFillStyle, ctxSetGlobalAlpha, ctxSetTextAlign } from "../sys/context";
+import { kWindowEventKeyDown, windowAddEventListener, windowRemoveEventListener } from "../sys/window";
 import { racerRender } from "./racer";
 
 type KeyBoardEventListener = (event: KeyboardEvent) => void;
@@ -118,12 +118,12 @@ export const uiSetupPlayerInput = () => {
     }
   };
 
-  windowAddEventListener('keydown', gKeyDownCallback);
+  windowAddEventListener(kWindowEventKeyDown, gKeyDownCallback);
 };
 
 export const uiRemovePlayerInput = () => {
   if (gKeyDownCallback) {
-    windowRemoveEventListener('keydown', gKeyDownCallback);
+    windowRemoveEventListener(kWindowEventKeyDown, gKeyDownCallback);
     gKeyDownCallback = 0;
   }
 };
@@ -138,11 +138,11 @@ export const uiRenderGame = (delta: number) => {
     msText: string, sText: string, mText: string,
     xMs: number, xS: number, xM: number, y: number
   ) => {
-    ctxSetTextAlign(ctx, 'left');
-    ctxFillText(ctx, msText, xMs, y);
-    ctxSetTextAlign(ctx, 'right');
-    ctxFillText(ctx, sText, xS, y);
-    ctxFillText(ctx, mText, xM, y);
+    ctxSetTextAlign('left');
+    ctxFillText(msText, xMs, y);
+    ctxSetTextAlign('right');
+    ctxFillText(sText, xS, y);
+    ctxFillText(mText, xM, y);
   };
   const drawInGameTimer = (time: number, y: number) => {
     const seconds = time | 0;
@@ -165,36 +165,36 @@ export const uiRenderGame = (delta: number) => {
     const minutes = mathFloor(seconds / 60);
     const remainingSeconds = seconds % 60;
 
-    ctxSetFillStyle(ctx, color);
-    ctxSetTextAlign(ctx, 'right');
-    ctxFillText(ctx, `${index + 1}`, -165, y);
+    ctxSetFillStyle(color);
+    ctxSetTextAlign('right');
+    ctxFillText(`${index + 1}`, -165, y);
     drawTimeElement(
       numberToString(milliseconds, 3),
       numberToString(remainingSeconds, 2) + '.',
       numberToString(minutes, 2) + ':',
       139, 138, 96, y
     )
-    ctxSetTextAlign(ctx, 'left');
-    ctxFillText(ctx, name, -150, y);
+    ctxSetTextAlign('left');
+    ctxFillText(name, -150, y);
   }
   const drawStandingsEntry = (index: number, name: string, points: number, color: string) => {
     const y = 90 + (index * 35);
 
-    ctxSetFillStyle(ctx, color);
-    ctxSetTextAlign(ctx, 'right');
-    ctxFillText(ctx, `${index + 1}`, -165, y);
-    ctxFillText(ctx, `${points} pts.`, 180, y);
-    ctxSetTextAlign(ctx, 'left');
-    ctxFillText(ctx, name, -150, y);
+    ctxSetFillStyle(color);
+    ctxSetTextAlign('right');
+    ctxFillText(`${index + 1}`, -165, y);
+    ctxFillText(`${points} pts.`, 180, y);
+    ctxSetTextAlign('left');
+    ctxFillText(name, -150, y);
   }
   const drawResultPanel = (alphaFactor: number, title: string) => {
-    ctx.globalAlpha = 0.5 * alphaFactor;
+    ctxSetGlobalAlpha(0.5 * alphaFactor);
     ctx.fillRect(-210, 0, 420, 360);
-    ctx.globalAlpha = alphaFactor;
+    ctxSetGlobalAlpha(alphaFactor);
 
     uiSetFont(32);
-    ctxSetFillStyle(ctx, '#fff');
-    ctxFillText(ctx, title, 0, 42);
+    ctxSetFillStyle('#fff');
+    ctxFillText(title, 0, 42);
   }
 
   ctx.save();
@@ -210,13 +210,13 @@ export const uiRenderGame = (delta: number) => {
   gTextHue = (gTextHue + delta * 10) % 360;
 
   ctx.translate((width / scale) / 2, 120);
-  ctxSetTextAlign(ctx, 'center');
+  ctxSetTextAlign('center');
 
   if (Game.mGameMode === kGameModeRaceResults) {
     gUIControlValue1 += delta;
 
     if (gUIControlValue2 === 1) {
-      ctx.globalAlpha = mathLerp(1, 0, mathClamp(gUIControlValue1 - 2, 0, 1));
+      ctxSetGlobalAlpha(mathLerp(1, 0, mathClamp(gUIControlValue1 - 2, 0, 1)));
 
       if (gUIControlValue1 > 3) {
         gUIControlValue1 -= 3;
@@ -224,8 +224,8 @@ export const uiRenderGame = (delta: number) => {
       }
 
       uiSetFont(64);
-      ctxSetFillStyle(ctx, `hsl(${gTextHue}, 100%, 85%)`);
-      ctxFillText(ctx, 'FINISH !', 0, 70);
+      ctxSetFillStyle(`hsl(${gTextHue}, 100%, 85%)`);
+      ctxFillText('FINISH !', 0, 70);
     } else if (gUIControlValue2 < 4) {
       const alphaFactor = (gUIControlValue2 === 2)
         ? mathLerp(0, 1, mathClamp(gUIControlValue1, 0, 1))
@@ -283,7 +283,7 @@ export const uiRenderGame = (delta: number) => {
       }
     }
 
-    ctx.globalAlpha = 1;
+    ctxSetGlobalAlpha(1);
   } else if (Game.mGameMode === kGameModeRaceFinalResult) {
     if (Game.mSequenceTimer > 1) {
       const playerPosition = Game.mRacersOrdered.indexOf(playerRacer) + 1;
@@ -296,31 +296,30 @@ export const uiRenderGame = (delta: number) => {
         }
       }
 
-      ctx.globalAlpha = mathLerp(0, 1, mathClamp(gUIControlValue1, 0, 1));
+      ctxSetGlobalAlpha(mathLerp(0, 1, mathClamp(gUIControlValue1, 0, 1)));
 
       if (playerPosition < 4) {
         uiSetFont(64);
-        ctxSetFillStyle(ctx, `hsl(${gTextHue}, 100%, 85%)`);
-        ctxFillText(ctx, 'Congratulations!', 0, 70);
+        ctxSetFillStyle(`hsl(${gTextHue}, 100%, 85%)`);
+        ctxFillText('Congratulations!', 0, 70);
 
         uiSetFont(32);
-        ctxSetFillStyle(ctx, '#fff');
+        ctxSetFillStyle('#fff');
         if (playerPosition < 2) {
-          ctxFillText(ctx, "Oh yeah! You've got the first place!", 0, 120);
+          ctxFillText("Oh yeah! You've got the first place!", 0, 120);
         } else {
           ctxFillText(
-            ctx,
             `You've finished ${(playerPosition < 3) ? '2nd' : '3rd'}! Well done!`,
             0, 120
           );
         }
       } else {
         uiSetFont(32);
-        ctxSetFillStyle(ctx, '#fff');
-        ctxFillText(ctx, `You finished ${playerPosition}th. Better luck next time!`, 0, 120);
+        ctxSetFillStyle('#fff');
+        ctxFillText(`You finished ${playerPosition}th. Better luck next time!`, 0, 120);
       }
 
-      ctx.globalAlpha = 1;
+      ctxSetGlobalAlpha(1);
     }
   } else {
     const speed = vec2Length(playerRacer.mVel) * 0.42;
@@ -329,19 +328,19 @@ export const uiRenderGame = (delta: number) => {
 
     if (Game.mGameMode === kGameModeRaceIntro) {
       if (Game.mSequenceTimer < 5) {
-        ctx.globalAlpha = mathLerp(0, 1, mathMin(mathClamp(4 - Game.mSequenceTimer, 0, 1), 1));
+        ctxSetGlobalAlpha(mathLerp(0, 1, mathMin(mathClamp(4 - Game.mSequenceTimer, 0, 1), 1)));
 
         uiSetFont(32);
-        ctxSetFillStyle(ctx, `hsl(${gTextHue}, 100%, 85%)`);
-        ctxFillText(ctx, Game.mTrackMetadata[0], 0, 60);
+        ctxSetFillStyle(`hsl(${gTextHue}, 100%, 85%)`);
+        ctxFillText(Game.mTrackMetadata[0], 0, 60);
 
-        ctx.globalAlpha = 0;
+        ctxSetGlobalAlpha(0);
       } else {
-        ctx.globalAlpha = mathLerp(0, 1, mathMin(Game.mSequenceTimer - 5, 1));
+        ctxSetGlobalAlpha(mathLerp(0, 1, mathMin(Game.mSequenceTimer - 5, 1)));
 
         uiSetFont(32);
-        ctxSetFillStyle(ctx, '#fff');
-        ctxFillText(ctx, 'Ready...', 0, 60);
+        ctxSetFillStyle('#fff');
+        ctxFillText('Ready...', 0, 60);
       }
     } else {
       if (gUIControlValue1 > 0 && playerRacer.mLap === 3) {
@@ -349,22 +348,22 @@ export const uiRenderGame = (delta: number) => {
         if (gUIControlValue1 < 0) gUIControlValue1 = 0;
         gUIControlValue2 = 1;
 
-        ctx.globalAlpha = ((gUIControlValue1 % 0.2) > 0.1) ? 0 : 1;
+        ctxSetGlobalAlpha(((gUIControlValue1 % 0.2) > 0.1) ? 0 : 1);
         uiSetFont(32);
-        ctxSetFillStyle(ctx, '#fff');
-        ctxFillText(ctx, 'Final Lap!', 0, 60);
+        ctxSetFillStyle('#fff');
+        ctxFillText('Final Lap!', 0, 60);
 
-        ctx.globalAlpha = 1;
+        ctxSetGlobalAlpha(1);
       } else if (gUIControlValue1 < 1 && gUIControlValue2 === 0) {
         gUIControlValue1 += delta / 2;
         if (gUIControlValue1 > 1) gUIControlValue1 = 1;
 
-        ctx.globalAlpha = ((gUIControlValue1 % 0.2) > 0.1) ? 1 : 0;
+        ctxSetGlobalAlpha(((gUIControlValue1 % 0.2) > 0.1) ? 1 : 0);
         uiSetFont(64);
-        ctxSetFillStyle(ctx, `hsl(${gTextHue}, 100%, 85%)`);
-        ctxFillText(ctx, 'GO !', 0, 70);
+        ctxSetFillStyle(`hsl(${gTextHue}, 100%, 85%)`);
+        ctxFillText('GO !', 0, 70);
 
-        ctx.globalAlpha = 1;
+        ctxSetGlobalAlpha(1);
       }
     }
 
@@ -411,23 +410,23 @@ export const uiRenderGame = (delta: number) => {
       }
 
       uiSetFont(8);
-      ctxSetFillStyle(ctx, '#fff');
-      ctxFillText(ctx, 'GAP', 0, 0);
+      ctxSetFillStyle('#fff');
+      ctxFillText('GAP', 0, 0);
 
       uiSetFont(18);
-      ctxSetFillStyle(ctx, gGapTimeColor);
-      ctxFillText(ctx, gGapTimeText, -3, 20);
+      ctxSetFillStyle(gGapTimeColor);
+      ctxFillText(gGapTimeText, -3, 20);
     }
 
     ctx.resetTransform();
     ctx.scale(scale, scale);
 
     uiSetFont(8);
-    ctxSetTextAlign(ctx, 'left');
-    ctxSetFillStyle(ctx, '#fff');
+    ctxSetTextAlign('left');
+    ctxSetFillStyle('#fff');
 
-    ctxFillText(ctx, 'POSITION', 20, 20);
-    ctxFillText(ctx, 'LAP', 120, 20);
+    ctxFillText('POSITION', 20, 20);
+    ctxFillText('LAP', 120, 20);
 
     let playerPosColor: string;
     let playerPosSufix: string;
@@ -447,53 +446,53 @@ export const uiRenderGame = (delta: number) => {
     }
 
     uiSetFont(64);
-    ctxSetTextAlign(ctx, 'right');
-    ctxSetFillStyle(ctx, playerPosColor);
-    ctxFillText(ctx, `${playerPosition}`, 60, 70);
+    ctxSetTextAlign('right');
+    ctxSetFillStyle(playerPosColor);
+    ctxFillText(`${playerPosition}`, 60, 70);
 
     uiSetFont(32);
-    ctxSetTextAlign(ctx, 'left');
-    ctxFillText(ctx, playerPosSufix, 62, 48);
+    ctxSetTextAlign('left');
+    ctxFillText(playerPosSufix, 62, 48);
 
     uiSetFont(18);
-    ctxSetFillStyle(ctx, '#fff');
-    ctxFillText(ctx, '/ 8', 64, 68);
-    ctxFillText(ctx, `${mathMin(playerRacer.mLap, 3) || 1}`, 120, 42);
-    ctxFillText(ctx, '/ 3', 136, 42);
+    ctxSetFillStyle('#fff');
+    ctxFillText('/ 8', 64, 68);
+    ctxFillText(`${mathMin(playerRacer.mLap, 3) || 1}`, 120, 42);
+    ctxFillText('/ 3', 136, 42);
 
     uiSetFont(12);
-    ctxSetTextAlign(ctx, 'right');
+    ctxSetTextAlign('right');
 
     ctx.translate(width / scale, 0);
-    ctxFillText(ctx, 'STAMINA', -142, 30);
-    ctxFillText(ctx, 'SPEED', -142, 64);
-    ctxFillText(ctx, 'km/h', -20, 64);
+    ctxFillText('STAMINA', -142, 30);
+    ctxFillText('SPEED', -142, 64);
+    ctxFillText('km/h', -20, 64);
 
-    ctxBeginPath(ctx);
-    ctxMoveTo(ctx, -204, 35);
-    ctxLineTo(ctx, -20, 35);
-    ctxLineTo(ctx, -20, 18);
-    ctxLineTo(ctx, -136, 18);
-    ctxLineTo(ctx, -136, 35);
-    ctxMoveTo(ctx, -204, 69);
-    ctxLineTo(ctx, -20, 69);
+    ctxBeginPath();
+    ctxMoveTo(-204, 35);
+    ctxLineTo(-20, 35);
+    ctxLineTo(-20, 18);
+    ctxLineTo(-136, 18);
+    ctxLineTo(-136, 35);
+    ctxMoveTo(-204, 69);
+    ctxLineTo(-20, 69);
     ctx.stroke();
 
-    const rainbowGradient = ctxGetRainbowGradient(ctx, -136, 0, 20, 0, 'c');
-    ctxSetFillStyle(ctx, rainbowGradient);
+    const rainbowGradient = ctxGetRainbowGradient(-136, 0, 20, 0, 'c');
+    ctxSetFillStyle(rainbowGradient);
     ctx.fillRect(-134, 20, 112 * playerRacer.mStamina, 13);
 
     uiSetFont(32);
-    ctxSetFillStyle(ctx, `hsl(${gTextHue}, 100%, 85%)`);
+    ctxSetFillStyle(`hsl(${gTextHue}, 100%, 85%)`);
 
-    ctxFillText(ctx, speed.toFixed(0), -64, 64);
+    ctxFillText(speed.toFixed(0), -64, 64);
 
     uiSetFont(8);
-    ctxSetFillStyle(ctx, '#fff');
+    ctxSetFillStyle('#fff');
 
-    ctxFillText(ctx, 'TOTAL TIME', -142, 90);
-    ctxFillText(ctx, 'LAP TIME', -142, 110);
-    ctxFillText(ctx, 'BEST LAP', -142, 130);
+    ctxFillText('TOTAL TIME', -142, 90);
+    ctxFillText('LAP TIME', -142, 110);
+    ctxFillText('BEST LAP', -142, 130);
 
     uiSetFont(18);
 
@@ -527,11 +526,11 @@ export const uiRenderGame = (delta: number) => {
         gLapColor = '#ff7';
       }
 
-      ctxSetFillStyle(ctx, gLapColor);
+      ctxSetFillStyle(gLapColor);
       drawInGameTimer(playerRacer.mLastLapTime, 110);
     } else if (gLastLapTimer > 0) {
       gLastLapTimer -= delta;
-      ctxSetFillStyle(ctx, gLapColor);
+      ctxSetFillStyle(gLapColor);
       drawInGameTimer(playerRacer.mLastLapTime, 110);
     } else {
       drawInGameTimer(playerRacer.mLapTime, 110);
@@ -549,8 +548,8 @@ export const uiRenderGame = (delta: number) => {
     }
 
     ctx.resetTransform();
-    ctx.globalAlpha = gFadeValue;
-    ctxSetFillStyle(ctx, '#fff');
+    ctxSetGlobalAlpha(gFadeValue);
+    ctxSetFillStyle('#fff');
     ctx.fillRect(0, 0, width, height);
   }
 
@@ -568,16 +567,16 @@ export const uiRenderMenu = (delta: number) => {
 
   ctx.save();
 
-  ctxSetFillStyle(ctx, `hsl(${gTextHue}, 100%, 85%)`);
+  ctxSetFillStyle(`hsl(${gTextHue}, 100%, 85%)`);
   ctx.fillRect(0, 0, width, height);
 
   ctx.translate(width / 2, height / 2);
-  ctxSetTextAlign(ctx, 'center');
+  ctxSetTextAlign('center');
 
   ctx.scale(scale, scale);
 
-  ctx.globalAlpha = 0.5;
-  ctxSetFillStyle(ctx, '#000');
+  ctxSetGlobalAlpha(0.5);
+  ctxSetFillStyle('#000');
   ctx.fillRect(-250, -200, 500, 300);
   ctx.fillRect(-250, 150, 500, 75);
 
@@ -596,40 +595,40 @@ export const uiRenderMenu = (delta: number) => {
 
   ctx.translate(0, -75);
   uiSetFont(18);
-  ctxSetFillStyle(ctx, '#fff');
-  ctx.globalAlpha = 1;
+  ctxSetFillStyle('#fff');
+  ctxSetGlobalAlpha(1);
 
-  ctxFillText(ctx, Game.mRacers[0].mData[0], 0, 142);
+  ctxFillText(Game.mRacers[0].mData[0], 0, 142);
 
-  ctxSetFillStyle(ctx, (Game.mDifficulty === 0) ? `hsl(${gTextHue}, 100%, 85%)` : '#fff');
-  ctxFillText(ctx, 'Easy', -120, 270);
-  ctxSetFillStyle(ctx, (Game.mDifficulty === 1) ? `hsl(${gTextHue}, 100%, 85%)` : '#fff');
-  ctxFillText(ctx, 'Normal', 0, 270);
-  ctxSetFillStyle(ctx, (Game.mDifficulty === 2) ? `hsl(${gTextHue}, 100%, 85%)` : '#fff');
-  ctxFillText(ctx, 'Hard', 120, 270);
-  ctxSetFillStyle(ctx, '#fff');
+  ctxSetFillStyle((Game.mDifficulty === 0) ? `hsl(${gTextHue}, 100%, 85%)` : '#fff');
+  ctxFillText('Easy', -120, 270);
+  ctxSetFillStyle((Game.mDifficulty === 1) ? `hsl(${gTextHue}, 100%, 85%)` : '#fff');
+  ctxFillText('Normal', 0, 270);
+  ctxSetFillStyle((Game.mDifficulty === 2) ? `hsl(${gTextHue}, 100%, 85%)` : '#fff');
+  ctxFillText('Hard', 120, 270);
+  ctxSetFillStyle('#fff');
 
   const translateY = (gSelection === 0) ? 15 : 264;
 
   ctx.translate(200, translateY);
-  ctxBeginPath(ctx);
-  ctxMoveTo(ctx, 0, -20);
-  ctxLineTo(ctx, 20, 0);
-  ctxLineTo(ctx, 0, 20);
-  ctxClosePathAndFill(ctx);
+  ctxBeginPath();
+  ctxMoveTo(0, -20);
+  ctxLineTo(20, 0);
+  ctxLineTo(0, 20);
+  ctxClosePathAndFill();
 
   ctx.translate(-400, 0);
-  ctxBeginPath(ctx);
-  ctxMoveTo(ctx, 0, -20);
-  ctxLineTo(ctx, -20, 0);
-  ctxLineTo(ctx, 0, 20);
-  ctxClosePathAndFill(ctx);
+  ctxBeginPath();
+  ctxMoveTo(0, -20);
+  ctxLineTo(-20, 0);
+  ctxLineTo(0, 20);
+  ctxClosePathAndFill();
 
   ctx.translate(200, -translateY);
 
   uiSetFont(42);
   ctx.strokeStyle = '#888';
-  ctxFillText(ctx, 'Rainbow GP', 0, -150);
+  ctxFillText('Rainbow GP', 0, -150);
   ctx.strokeText('Rainbow GP', 0, -150);
 
   if (gUIControlValue2) {
@@ -650,9 +649,9 @@ export const uiRenderMenu = (delta: number) => {
       gFadeDirection = 0;
     }
 
-    ctx.globalAlpha = gFadeValue;
+    ctxSetGlobalAlpha(gFadeValue);
     ctx.resetTransform();
-    ctxSetFillStyle(ctx, '#fff');
+    ctxSetFillStyle('#fff');
     ctx.fillRect(0, 0, width, height);
   }
 

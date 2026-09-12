@@ -2,7 +2,7 @@ import { easeInOutQuad, easeInQuad, easeLinear, easeOutQuad } from "../easing";
 
 // [points.x points.y][], [frontback.points.x frontback.points.y][], useParentDepth, color
 export type SkeletonNodeShapes = {
-  [parent: number]: [number[], number[] | null, boolean, string];
+  [parent: number]: [number[], number[] | 0, boolean, string];
 };
 // pos.x, pos.y, z, radius, depthOffset, color, split, parent
 export type SkeletonNode = [number, number, number, number, number, string, boolean, number];
@@ -302,7 +302,7 @@ export const racerDataGetSkeletonShapes = (
       -8.3, -17.8,
       -6.8, -17.8,
     ],
-    null,
+    0,
     true,
     colorBody,
   ],

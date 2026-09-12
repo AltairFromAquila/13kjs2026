@@ -1,10 +1,10 @@
 import type { Renderable } from "../core/render";
-import { racerAnimations, racerMirrorNodes, type RacerData, type SkeletonNode, type SkeletonNodeShapes } from "../data/racer.data";
+import { racerAnimations, racerMirrorNodes, type RacerData } from "../data/racer.data";
 import { easeOutCubic } from "../easing";
 import { Game } from "../game";
-import { kMathEpsilon, kMathHalfPi, kMathPi, kMathTau, mathAbs, mathAtan2, mathCeil, mathClamp, mathCos, mathHypot, mathJs, mathLerp, mathMax, mathMin, mathMod, mathPingPong, mathRandom, mathSin, mathSqrt, splineCalculateSegmentPoint, splineCalculateSegmentTangent, vec2Add, vec2ClampLength, vec2Copy, vec2CopyFromTuple, vec2Dot, vec2Length, vec2LengthSqr, vec2MulScalar, vec2New, vec2NewCopy, vec2Normalize, type Vec2 } from "../math";
-import { ctxBeginPath, ctxClosePathAndFill, ctxLineTo, ctxMoveTo, ctxSetFillStyle } from "../sys/context";
-import { collisionNewCircleCollider, collisionResolveCollisions, collisionSyncColliders, type CircleCollider, type PhysicEntity } from "./collision";
+import { kMathEpsilon, kMathHalfPi, kMathPi, kMathTau, mathAbs, mathAtan2, mathCeil, mathClamp, mathCos, mathHypot, mathLerp, mathMax, mathMin, mathMod, mathPingPong, mathRandom, mathSin, mathSqrt, splineCalculateSegmentPoint, splineCalculateSegmentTangent, vec2Add, vec2ClampLength, vec2Copy, vec2CopyFromTuple, vec2Dot, vec2LengthSqr, vec2MulScalar, vec2New, vec2NewCopy, vec2Normalize, type Vec2 } from "../math";
+import { ctxBeginPath, ctxClosePathAndFill, ctxLineTo, ctxMoveTo, ctxSetFillStyle, ctxSetGlobalAlpha } from "../sys/context";
+import { collisionNewCircleCollider, collisionResolveCollisions, collisionSyncColliders, type PhysicEntity } from "./collision";
 import { controllerIsPlayerControlled, controllerNew, controllerReset, controllerReturnToTrack, type Controller } from "./controllers";
 import { trackCopyTrackPoint, trackFindPointInTrack, type TrackPointProjection } from "./track";
 
@@ -551,32 +551,32 @@ export const racerRender = (
 
   ctx.save();
   ctx.globalCompositeOperation = "source-over";
-  ctx.globalAlpha = alpha * (self.mController.mReturningToTrack?.mIsReturning ? 0.25 : 1);
+  ctxSetGlobalAlpha(alpha * (self.mController.mReturningToTrack?.mIsReturning ? 0.25 : 1));
 
   const drawCircle = (x: number, y: number, radius: number, color: string) => {
-    ctxSetFillStyle(ctx, color);
-    ctxBeginPath(ctx);
-    ctxMoveTo(ctx, x + radius, y);
+    ctxSetFillStyle(color);
+    ctxBeginPath();
+    ctxMoveTo(x + radius, y);
     ctx.arc(x, y, radius, 0, kMathTau);
-    ctxClosePathAndFill(ctx);
+    ctxClosePathAndFill();
   };
 
   // #region Draw skeleton
   for (const node of nodeSet) {
     if (node.mType === 1) {
-      ctxSetFillStyle(ctx, skeletonShapes[node.mRef][3]);
-      ctxBeginPath(ctx);
+      ctxSetFillStyle(skeletonShapes[node.mRef][3]);
+      ctxBeginPath();
 
       node.mPoints.forEach((point, idx) => {
         const [sx, sy] = toScreen(point);
         if (idx === 0) {
-          ctxMoveTo(ctx, sx, sy);
+          ctxMoveTo(sx, sy);
         } else {
-          ctxLineTo(ctx, sx, sy);
+          ctxLineTo(sx, sy);
         }
       });
 
-      ctxClosePathAndFill(ctx);
+      ctxClosePathAndFill();
     } else {
       const skelNode = skeleton[node.mRef];
       const [sx, sy] = toScreen(node.mPos);

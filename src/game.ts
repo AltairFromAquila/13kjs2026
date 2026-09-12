@@ -5,9 +5,9 @@ import { cloudsGenerate, kCloudsNoiseWidth } from "./game/clouds";
 import { racerFixedTick, racerNew, racerRender, racerReset, racerSetAngleFromVector, racerSetupTrackPoints, racerTick, type Racer } from "./game/racer";
 import { Track, trackDrawTexture, trackGetStartPositions, trackLoadData } from "./game/track";
 import { mathCeil, mathLerp, mathMin, mathRandom, mathTan, vec2Add, vec2Copy, vec2MulScalar, vec2New } from "./math";
-import { cameraFreeCamNew, cameraSetupFreeCamEvents, cameraHandleFreeCamInput, type FreeCamera, cameraGameCamNew, cameraGameCamTick, type GameCamera, cameraGameCamSetupIntro } from "./game/camera";
+import { cameraGameCamNew, cameraGameCamTick, type GameCamera, cameraGameCamSetupIntro } from "./game/camera";
 import { kVerticalFov, type Camera } from "./core/camera";
-import { uiCalculateResults, uiFadeIn, uiFadeOut, uiRemovePlayerInput, uiRenderGame, uiRenderMenu, uiReset, uiSetupPlayerInput } from "./game/ui";
+import { uiCalculateResults, uiFadeIn, uiRenderGame, uiRenderMenu, uiReset, uiSetupPlayerInput } from "./game/ui";
 import { controllerProcessAIForRacer, controllerProcessPlayerInput, controllerSetupPlayerInput } from "./game/controllers";
 import { collisionActivateEntity } from "./game/collision";
 import { kTerrainWidth } from "./game/terrain";
@@ -114,7 +114,6 @@ const processDefault = (self: Game, delta: number) => {
   }
 
   cameraGameCamTick(self.mCamera as GameCamera, delta);
-  // cameraHandleFreeCamInput(self.mCamera as FreeCamera, delta);
   render(self.mCamera, self.mRenderRacerCmd);
   uiRenderGame(delta);
 }
@@ -159,7 +158,6 @@ export const Game: Game = {
   mRacersOrdered: [],
   mRacersStandings: [],
   mCamera: cameraGameCamNew(),
-  // mCamera: cameraFreeCamNew(),
   mRenderRacerCmd: {
     mRenderables: [],
     mScale: 440 / ((900 * 0.5) / mathTan(kVerticalFov * 0.5)),
@@ -212,7 +210,7 @@ export const gameGoToTrack = (trackIdx: number) => {
   Game.mTrackMetadata = track.mMetadata;
   Game.mCurrentTrack = trackIdx;
 
-  const trackImageData = ctxGetCanvasImageData(Game.mTrack.textureCtx, Game.mTrack.textureCanvas.width, Game.mTrack.textureCanvas.height);
+  const trackImageData = ctxGetCanvasImageData(Game.mTrack.textureCanvas.width, Game.mTrack.textureCanvas.height, Game.mTrack.textureCtx);
 
   renderAssignPlanes(
     trackImageData.mPixels,

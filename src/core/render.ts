@@ -105,7 +105,7 @@ const {
 let {
   mImage: planeImageData,
   mPixels: planePixels,
-} = ctxGetCanvasImageData(projectedPlaneCtx, canvas.width, canvas.height);
+} = ctxGetCanvasImageData(canvas.width, canvas.height, projectedPlaneCtx);
 
 const blendAbgr = (src: number, dst: number, t: number): number => {
   const invT = 1 - t;
@@ -472,7 +472,7 @@ export const render = <R extends Renderable>(camera: Camera, renderableCmd: Rend
       projectedPlaneCanvas.width = canvasWidth;
       projectedPlaneCanvas.height = canvasHeight;
 
-      const newImageData = ctxGetCanvasImageData(projectedPlaneCtx, canvasWidth, canvasHeight);
+      const newImageData = ctxGetCanvasImageData(canvasWidth, canvasHeight, projectedPlaneCtx);
       planeImageData = newImageData.mImage;
       planePixels = newImageData.mPixels;
     }

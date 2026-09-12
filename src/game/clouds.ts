@@ -11,7 +11,7 @@ const {
 const {
   mImage: cloudsImageData,
   mPixels: cloudsPixels,
-} = ctxGetCanvasImageData(cloudsCtx, kCloudsNoiseWidth, kCloudsNoiseWidth);
+} = ctxGetCanvasImageData(kCloudsNoiseWidth, kCloudsNoiseWidth, cloudsCtx);
 
 export const cloudsGenerate = () => {
   noiseGenerateCubicNoisePlane(
