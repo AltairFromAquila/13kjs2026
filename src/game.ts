@@ -1,7 +1,7 @@
 import { render, renderAssignPlanes, renderGetCloudsOffsetRef, renderGetTerrainOffsetRef, renderSetColors, renderSetFogValues, type RenderableCommand } from "./core/render";
 import { racerData } from "./data/racer.data";
 import { tracks, type TrackMetadata } from "./data/track.data";
-import { cloudsGenerate, cloudsGetPixels, kCloudsNoiseWidth } from "./game/clouds";
+import { cloudsGenerate, kCloudsNoiseWidth } from "./game/clouds";
 import { racerFixedTick, racerNew, racerRender, racerReset, racerSetAngleFromVector, racerSetupTrackPoints, racerTick, type Racer } from "./game/racer";
 import { Track, trackDrawTexture, trackGetStartPositions, trackLoadData } from "./game/track";
 import { mathCeil, mathLerp, mathMin, mathRandom, mathTan, vec2Add, vec2Copy, vec2MulScalar, vec2New } from "./math";
@@ -22,6 +22,8 @@ export const kGameModeRaceRacing = 1;
 export const kGameModeRaceResults = 2;
 export const kGameModeRaceFinalResult = 3;
 export const kGameModeRaceMenu = 4;
+
+export let gGameCloudsPlane: Uint32Array = 0 as any;
 
 export interface Game {
   mProcess: (self: Game, delta: number) => void;
@@ -214,7 +216,7 @@ export const gameGoToTrack = (trackIdx: number) => {
 
   renderAssignPlanes(
     trackImageData.mPixels,
-    cloudsGetPixels(),
+    gGameCloudsPlane,
     track.mMetadata[2](),
     Game.mTrack.textureCanvas.width, kCloudsNoiseWidth, kTerrainWidth,
     track.mMetadata[5] * 30, track.mMetadata[4] * 30, track.mMetadata[3] * 30
@@ -269,7 +271,7 @@ export const gameGoToFinal = () => {
 }
 
 export const gameInit = () => {
-  cloudsGenerate();
+  gGameCloudsPlane = cloudsGenerate();
 
   Game.mRacers.forEach(racer => {
     Game.mRenderRacerCmd.mRenderables.push(racer);

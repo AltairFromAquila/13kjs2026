@@ -1,4 +1,4 @@
-import { colorPack, colorUnpack, mathClamp, noiseBufferedCubicNoise, sampleCubicNoise } from "../math";
+import { colorPack, mathClamp, noiseGenerateCubicNoisePlane } from "../math";
 import { ctxCreateOffscreenCanvas, ctxGetCanvasImageData } from "../sys/context";
 
 export type TerrainColorStops = {
@@ -7,7 +7,6 @@ export type TerrainColorStops = {
 }[];
 
 export const kTerrainWidth = 512 as const;
-const kTerrainMask = kTerrainWidth - 1;
 
 const {
   mCanvas: terrainCanvas,
@@ -43,51 +42,16 @@ const terrainSampleGradient = (colorData: TerrainColorStops, height: number) => 
 };
 
 export const terrainGenerate = (colorData: TerrainColorStops, baseNoiseValue: number) => {
-  const baseNoise = noiseBufferedCubicNoise(baseNoiseValue, baseNoiseValue);
-
-  for (let y = 0; y < kTerrainWidth; ++y) {
-    for (let x = 0; x < kTerrainWidth; ++x) {
-      const u = x / kTerrainWidth;
-      const v = y / kTerrainWidth;
-
-      let frequency = 1;
-      let amplitude = 1;
-      let total = 0;
-      let amplitudeSum = 0;
-
-      for (let octave = 0; octave < 8; ++octave) {
-        const sampleX = u * baseNoiseValue * frequency;
-        const sampleY = v * baseNoiseValue * frequency;
-        total += sampleCubicNoise(sampleX, sampleY, baseNoise, baseNoiseValue, baseNoiseValue) * amplitude;
-        amplitudeSum += amplitude;
-
-        frequency *= 2;
-        amplitude *= 0.5;
-      }
-
-      const fbm = total / amplitudeSum;
+  noiseGenerateCubicNoisePlane(
+    terrainPixels, kTerrainWidth, baseNoiseValue, 8,
+    fbm => {
       const height = mathClamp((fbm - 0.24) / 0.64, 0, 1);
       const color = terrainSampleGradient(colorData, height);
 
-      // ABGR packing: A in high byte, then B, G, R.
-      terrainPixels[(y * kTerrainWidth) + x] = colorPack(color.r, color.g, color.b, 255);
+      return colorPack(color.r, color.g, color.b, 255);
     }
-  }
-
-  // Duplicate edge texels so linear filtering can cross borders without visible seams.
-  for (let i = 0; i < kTerrainWidth; ++i) {
-    terrainPixels[(i * kTerrainWidth) + kTerrainMask] = terrainPixels[i * kTerrainWidth];
-    terrainPixels[(kTerrainMask * kTerrainWidth) + i] = terrainPixels[i];
-  }
+  );
 
   terrainCtx.putImageData(terrainImageData, 0, 0);
-  return terrainPixels;
-}
-
-export const terrainGetCanvas = () => {
-  return terrainCanvas;
-}
-
-export const terrainGetPixels = () => {
   return terrainPixels;
 }

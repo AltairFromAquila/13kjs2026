@@ -96,12 +96,12 @@ export const noiseBufferedCubicNoise = (width: number, height: number) => {
   return values;
 }
 
-export const interpolateCubicNoise = (a: number, b: number, c: number, d: number, x: number) => {
+export const noiseInterpolateCubicNoise = (a: number, b: number, c: number, d: number, x: number) => {
   const p = (d - c) - (a - b);
   return x * (x * (x * p + ((a - b) - p)) + (c - a)) + b;
 }
 
-export const sampleCubicNoise = (x: number, y: number, values: Float32Array, width: number, height: number) => {
+export const noiseSampleCubicNoise = (x: number, y: number, values: Float32Array, width: number, height: number) => {
   const xi = x | 0;
   const yi = y | 0;
   const tx = x - xi;
@@ -109,29 +109,29 @@ export const sampleCubicNoise = (x: number, y: number, values: Float32Array, wid
 
   const getValue = (sx: number, sy: number) => values[(mathMod(sy, height) * width) + mathMod(sx, width)];
 
-  return interpolateCubicNoise(
-    interpolateCubicNoise(
+  return noiseInterpolateCubicNoise(
+    noiseInterpolateCubicNoise(
       getValue(xi, yi),
       getValue(xi + 1, yi),
       getValue(xi + 2, yi),
       getValue(xi + 3, yi),
       tx
     ),
-    interpolateCubicNoise(
+    noiseInterpolateCubicNoise(
       getValue(xi, yi + 1),
       getValue(xi + 1, yi + 1),
       getValue(xi + 2, yi + 1),
       getValue(xi + 3, yi + 1),
       tx
     ),
-    interpolateCubicNoise(
+    noiseInterpolateCubicNoise(
       getValue(xi, yi + 2),
       getValue(xi + 1, yi + 2),
       getValue(xi + 2, yi + 2),
       getValue(xi + 3, yi + 2),
       tx
     ),
-    interpolateCubicNoise(
+    noiseInterpolateCubicNoise(
       getValue(xi, yi + 3),
       getValue(xi + 1, yi + 3),
       getValue(xi + 2, yi + 3),
@@ -140,6 +140,45 @@ export const sampleCubicNoise = (x: number, y: number, values: Float32Array, wid
     ),
     ty
   ) * 0.5 + 0.25;
+}
+
+export const noiseGenerateCubicNoisePlane = (
+  pixels: Uint32Array, planeSize: number,
+  baseNoiseSize: number, octaves: number, colorFunction: (fbm: number) => number
+) => {
+  const baseNoise = noiseBufferedCubicNoise(baseNoiseSize, baseNoiseSize);
+
+  for (let y = 0; y < planeSize; ++y) {
+    for (let x = 0; x < planeSize; ++x) {
+      const u = x / planeSize;
+      const v = y / planeSize;
+
+      let frequency = 1;
+      let amplitude = 1;
+      let total = 0;
+      let amplitudeSum = 0;
+
+      for (let octave = 0; octave < octaves; ++octave) {
+        const sampleX = u * baseNoiseSize * frequency;
+        const sampleY = v * baseNoiseSize * frequency;
+        total += noiseSampleCubicNoise(sampleX, sampleY, baseNoise, baseNoiseSize, baseNoiseSize) * amplitude;
+        amplitudeSum += amplitude;
+
+        frequency *= 2;
+        amplitude *= 0.5;
+      }
+
+      const fbm = total / amplitudeSum;
+      pixels[(y * planeSize) + x] = colorFunction(fbm);
+    }
+  }
+
+  // Duplicate edge texels so linear filtering can cross borders without visible seams.
+  const planeMask = planeSize - 1;
+  for (let i = 0; i < planeSize; ++i) {
+    pixels[(i * planeSize) + planeMask] = pixels[i * planeSize];
+    pixels[(planeMask * planeSize) + i] = pixels[i];
+  }
 }
 
 //#endregion

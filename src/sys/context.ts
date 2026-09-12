@@ -1,4 +1,4 @@
-type AnyCanvasRenderingContext2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+export type AnyCanvasRenderingContext2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
 export const doc = document;
 
