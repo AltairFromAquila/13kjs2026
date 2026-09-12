@@ -33,11 +33,6 @@ export interface TrackPointProjection {
   mInside: boolean;
 }
 
-export interface TrackFindPointResult {
-  projection: TrackPointProjection;
-  mainPathProjection: TrackPointProjection | null;
-}
-
 export const kTrackTextureSize = 4096;
 
 export class Track {
@@ -68,10 +63,10 @@ export function trackLoadData(self: Track, data: TrackRawData) {
   const mainPath: SplinePoint[] = [];
   for (let i = 0; i < data.mMainPath.length; i += 3) {
     mainPath.push({
-      x: data.mMainPath[i],
-      y: data.mMainPath[i + 1],
+      x: data.mMainPath[i] * 10,
+      y: data.mMainPath[i + 1] * 10,
       tension: 0,
-      width: data.mMainPath[i + 2],
+      width: data.mMainPath[i + 2] * 10,
     });
   }
   
@@ -80,10 +75,10 @@ export function trackLoadData(self: Track, data: TrackRawData) {
     const path: SplinePoint[] = [];
     for (let i = 4; i < pathData.mData.length; i += 3) {
       path.push({
-        x: pathData.mData[i],
-        y: pathData.mData[i + 1],
+        x: pathData.mData[i] * 10,
+        y: pathData.mData[i + 1] * 10,
         tension: 0,
-        width: pathData.mData[i + 2],
+        width: pathData.mData[i + 2] * 10,
       });
     }
     secondaryPaths.push({

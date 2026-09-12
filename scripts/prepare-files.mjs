@@ -81,6 +81,18 @@ function updateIndexScriptTag(indexHtml, oldSrc, newSrc) {
   );
 }
 
+function replaceConstWithLet(bundlePath) {
+  const js = readFileSync(bundlePath, 'utf8');
+  const matches = js.match(/const\s/g);
+  if (!matches || matches.length === 0) {
+    return 0;
+  }
+
+  const replaced = js.replaceAll('const ', 'let ');
+  writeFileSync(bundlePath, replaced, 'utf8');
+  return matches.length;
+}
+
 function main() {
   if (!existsSync(sourceIndexPath)) {
     fail('dist/index.html not found. Run Vite build first.');
@@ -95,6 +107,8 @@ function main() {
   const outJsFileName = `${bundleInfo.shortHash}.js`;
   const outJsPath = path.join(releaseDistDir, outJsFileName);
 
+  const replacements = replaceConstWithLet(bundleInfo.bundlePath);
+  console.log(`[prepare-files] Replaced const declarations: ${replacements}`);
   run('npx', ['roadroller', '-O', '2', '-o', outJsPath, bundleInfo.bundlePath]);
 
   cpSync(sourceIndexPath, path.join(releaseDistDir, 'index.html'));
