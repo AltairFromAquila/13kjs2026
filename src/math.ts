@@ -81,6 +81,8 @@ export const mathPingPong = (v: number, min: number, max: number) => {
   return low + (t < length ? t : cycle - t);
 };
 
+export const numberToString = (n: number, padMaxLength: number) => `${n}`.padStart(padMaxLength, '0');
+
 //#region Noise
 // Based on https://github.com/jobtalle/CubicNoise
 

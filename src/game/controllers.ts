@@ -106,6 +106,15 @@ const controllerTranslatePlayerDirection = (x: number, y: number, racer: Racer, 
   }
 };
 
+export const controllerReset = (self: Controller) => {
+  self.mPreviousSegmentIdx = -1;
+  
+  self.mPreviousSegmentT = self.mBlockPlayerTimer =
+  self.mGallopingReactionTimer = self.mReactionTimer = 0;
+
+  self.mIsWaitingForStamina = self.mIsBlockingPlayer = self.mWasStuck = false;
+}
+
 export const controllerIsPlayerControlled = (self: Controller) => {
   return self.mProcessFunction === controllerProcessPlayerInput;
 };

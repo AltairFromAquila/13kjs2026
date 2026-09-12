@@ -2,18 +2,20 @@ import { render, renderAssignPlanes, renderGetCloudsOffsetRef, renderGetTerrainO
 import { racerDataGetSkeleton, racerDataGetSkeletonShapes } from "./data/racer.data";
 import { tracks, type TrackMetadata } from "./data/track.data";
 import { cloudsGenerate, cloudsGetPixels, kCloudsNoiseWidth } from "./game/clouds";
-import { racerFixedTick, racerNew, racerRender, racerSetAngleFromVector, racerSetupTrackPoints, racerTick, type Racer } from "./game/racer";
+import { racerFixedTick, racerNew, racerRender, racerReset, racerSetAngleFromVector, racerSetupTrackPoints, racerTick, type Racer } from "./game/racer";
 import { Track, trackDrawTexture, trackGetStartPositions, trackLoadData } from "./game/track";
 import { mathCeil, mathLerp, mathMin, mathRandom, mathTan, vec2Add, vec2Copy, vec2MulScalar, vec2New } from "./math";
 import { cameraFreeCamNew, cameraSetupFreeCamEvents, cameraHandleFreeCamInput, type FreeCamera, cameraGameCamNew, cameraGameCamTick, type GameCamera, cameraGameCamSetupIntro } from "./game/camera";
 import { kVerticalFov, type Camera } from "./core/camera";
-import { renderGameUI } from "./game/game-ui";
+import { uiCalculateResults, uiFadeIn, uiFadeOut, uiRenderGame, uiResetGame } from "./game/ui";
 import { controllerProcessAIForRacer, controllerProcessPlayerInput, controllerSetupPlayerInput } from "./game/controllers";
 import { collisionActivateEntity } from "./game/collision";
 import { kTerrainWidth } from "./game/terrain";
 import { ctxGetCanvasImageData } from "./sys/context";
 
 const kTargetTickTime = 1/120;
+
+const kGamePointTable = [13, 10, 8, 6, 4, 3, 2, 1];
 
 export const kGameModeRaceIntro = 0;
 export const kGameModeRaceRacing = 1;
@@ -31,8 +33,10 @@ export interface Game {
   // TODO: Refactor later
   mTrack: Track;
   mTrackMetadata: TrackMetadata;
+  mCurrentTrack: number;
   mRacers: Racer[];
   mRacersOrdered: Racer[];
+  mRacersStandings: Racer[];
 
   mCamera: Camera;
 
@@ -93,13 +97,23 @@ const processDefault = (self: Game, delta: number) => {
     if (self.mRacers[0].mLap > 3) {
       self.mGameMode = kGameModeRaceResults;
       Game.mRacers[0].mController.mProcessFunction = controllerProcessAIForRacer;
+
+      self.mRacersOrdered.forEach((r, i) => {
+        r.mPoints += kGamePointTable[i];
+      });
+      self.mRacersStandings.sort(
+        (a, b) => (a.mPoints !== b.mPoints)
+          ? b.mPoints- a.mPoints
+          : self.mRacers.indexOf(a) - self.mRacers.indexOf(b)
+      );
+      uiCalculateResults();
     }
   }
 
   cameraGameCamTick(self.mCamera as GameCamera, delta);
   // cameraHandleFreeCamInput(self.mCamera as FreeCamera, delta);
   render(self.mCamera, self.mRenderRacerCmd);
-  renderGameUI(delta);
+  uiRenderGame(delta);
 }
 
 const processWithFixed = (self: Game, delta: number) => {
@@ -122,6 +136,7 @@ export const Game: Game = {
   mSequenceTimer: 0,
   mTrack: new Track(),
   mTrackMetadata: tracks[0].mMetadata,
+  mCurrentTrack: 0,
   mRacers: [
     racerNew(
       racerDataGetSkeleton('#faa', '#000', '#b44', '#ff7', '#ff0'),
@@ -157,6 +172,7 @@ export const Game: Game = {
     ),
   ],
   mRacersOrdered: [],
+  mRacersStandings: [],
   mCamera: cameraGameCamNew(),
   // mCamera: cameraFreeCamNew(),
   mRenderRacerCmd: {
@@ -167,14 +183,14 @@ export const Game: Game = {
   }
 }
 
-export const gameInit = () => {
-  const track = tracks[3];
+export const gameGoToTrack = (trackIdx: number) => {
+  const track = tracks[trackIdx];
 
   trackLoadData(Game.mTrack, track);
   trackDrawTexture(Game.mTrack);
-  cloudsGenerate();
 
   Game.mTrackMetadata = track.mMetadata;
+  Game.mCurrentTrack = trackIdx;
 
   const trackImageData = ctxGetCanvasImageData(Game.mTrack.textureCtx, Game.mTrack.textureCanvas.width, Game.mTrack.textureCanvas.height);
 
@@ -187,7 +203,7 @@ export const gameInit = () => {
   );
   renderSetColors(track.mMetadata[1], 0xff00cc30);
   renderSetFogValues(track.mMetadata[6] / 10, 1.1);
-  
+
   const racersCount = Game.mRacers.length;
   const startRows = 2;
   const racersPerRow = mathCeil(racersCount / startRows);
@@ -204,6 +220,7 @@ export const gameInit = () => {
     for (let racerIdx = firstRacerInRow; racerIdx < firstRacerInNextRow && racerIdx < racersCount; ++racerIdx) {
       const racer = Game.mRacers[racerIdx];
 
+      racerReset(racer);
       vec2Add(
         vec2MulScalar(
           vec2Copy(racer.mPos, normal),
@@ -214,23 +231,32 @@ export const gameInit = () => {
       racerSetAngleFromVector(racer, pos.mTangent);
       racerSetupTrackPoints(racer, pos);
 
-      Game.mRenderRacerCmd.mRenderables.push(racer);
-      Game.mRacersOrdered.push(racer);
-      collisionActivateEntity(racer);
-
       widthFactor += racerDistance;
     }
   }
 
-  (Game.mCamera as GameCamera).mTarget = Game.mRacers[0];
-
   Game.mRacers[0].mController.mProcessFunction = controllerProcessPlayerInput;
+  Game.mGameMode = kGameModeRaceIntro;
+  Game.mSequenceTimer = 0;
+  Game.mRenderRacerCmd.mAlpha = 0;
+  Game.mProcess = processDefault;
+  cameraGameCamSetupIntro(Game.mCamera as GameCamera);
+  uiResetGame();
+  uiFadeIn();
+};
+
+export const gameInit = () => {
+  cloudsGenerate();
+
+  Game.mRacers.forEach(racer => {
+    Game.mRenderRacerCmd.mRenderables.push(racer);
+    Game.mRacersOrdered.push(racer);
+    Game.mRacersStandings.push(racer);
+    collisionActivateEntity(racer);
+  });
+
+  (Game.mCamera as GameCamera).mTarget = Game.mRacers[0];
   controllerSetupPlayerInput(Game.mRacers[0].mController);
 
-  // cameraSetupFreeCamEvents(Game.mCamera as FreeCamera);
-
-  cameraGameCamSetupIntro(Game.mCamera as GameCamera);
-
-  console.log(Game.mRacers[0].mPos);
-  console.log(Game.mRacers[0].mAngle);
+  gameGoToTrack(0);
 }

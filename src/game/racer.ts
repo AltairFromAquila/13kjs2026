@@ -5,7 +5,7 @@ import { Game } from "../game";
 import { kMathEpsilon, kMathHalfPi, kMathPi, kMathTau, mathAbs, mathAtan2, mathCeil, mathClamp, mathCos, mathHypot, mathJs, mathLerp, mathMax, mathMin, mathMod, mathPingPong, mathRandom, mathSin, mathSqrt, splineCalculateSegmentPoint, splineCalculateSegmentTangent, vec2Add, vec2ClampLength, vec2Copy, vec2CopyFromTuple, vec2Dot, vec2Length, vec2LengthSqr, vec2MulScalar, vec2New, vec2NewCopy, vec2Normalize, type Vec2 } from "../math";
 import { ctxBeginPath, ctxClosePathAndFill, ctxLineTo, ctxMoveTo, ctxSetFillStyle } from "../sys/context";
 import { collisionNewCircleCollider, collisionResolveCollisions, collisionSyncColliders, type CircleCollider, type PhysicEntity } from "./collision";
-import { controllerIsPlayerControlled, controllerNew, controllerReturnToTrack, type Controller } from "./controllers";
+import { controllerIsPlayerControlled, controllerNew, controllerReset, controllerReturnToTrack, type Controller } from "./controllers";
 import { trackCopyTrackPoint, trackFindPointInTrack, type TrackPointProjection } from "./track";
 
 const kRacerColRadius = 3 as const;
@@ -83,6 +83,8 @@ export interface Racer extends Renderable, PhysicEntity {
   mLapTracker: number;
 
   mStamina: number;
+
+  mPoints: number;
 }
 
 export const racerNew = (skeleton: SkeletonNode[], skeletonShapes: SkeletonNodeShapes): Racer => ({
@@ -119,20 +121,24 @@ export const racerNew = (skeleton: SkeletonNode[], skeletonShapes: SkeletonNodeS
   mLapTracker: 0,
 
   mStamina: 1,
+
+  mPoints: 0,
 });
 
 export const racerReset = (self: Racer) => {
-  self.mPos.x = self.mPos.y = self.mVel.x = self.mVel.y = self.mFrontCol.mPos.y =
-  self.mMidCol.mPos.x = self.mMidCol.mPos.y = self.mBackCol.mPos.y = 0;
-
-  self.mFrontCol.mPos.x = kRacerColRadius;
-  self.mBackCol.mPos.x = -kRacerColRadius;
+  self.mPos.x = self.mPos.y = self.mVel.x = self.mVel.y = 0;
 
   self.mLastValidPathIdx = -1;
 
   self.mMaxSpeed = kRacerMaxJogSpeed;
   self.mJogTime = 0;
   self.mStamina = 1;
+
+  self.mTotalTime = self.mLapTime = self.mLastLapTime =
+  self.mBestLapTime = self.mLap = self.mLapTracker = 0;
+
+  collisionSyncColliders(self);
+  controllerReset(self.mController);
 };
 
 export const racerSetupTrackPoints = (self: Racer, startTrackPoint: TrackPointProjection) => {

@@ -50,7 +50,10 @@ export const cameraGameCamSetupIntro = (self: GameCamera) => {
   self.mPitch = kMathHalfPi;
   self.mHeight = 3000;
 
-  self.mPos.x = self.mPos.y = kTrackTextureSize / 2;
+  // self.mPos.x = self.mPos.y = kTrackTextureSize / 2;
+  const trackCenter = kTrackTextureSize / 2;
+  self.mPos.x = mathLerp(self.mTarget.mPos.x, trackCenter, 0.5);
+  self.mPos.y = mathLerp(self.mTarget.mPos.y, trackCenter, 0.5);
 }
 
 export const cameraGameCamTick = (self: GameCamera, delta: number) => {
