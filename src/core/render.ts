@@ -7,9 +7,9 @@ export interface RenderState {
   mVerTanTable: number[];
   mHorTanTable: number[];
 
-  mTerrainPixels: Uint32Array | null;
-  mCloudsPixels: Uint32Array | null;
-  mTrackPixels: Uint32Array | null;
+  mTerrainPixels: Uint32Array | 0;
+  mCloudsPixels: Uint32Array | 0;
+  mTrackPixels: Uint32Array | 0;
 
   mTerrainOffset: Vec2;
   mCloudsOffset: Vec2;
@@ -65,9 +65,9 @@ const renderState: RenderState = {
   mVerTanTable: [],
   mHorTanTable: [],
 
-  mTerrainPixels: null,
-  mCloudsPixels: null,
-  mTrackPixels: null,
+  mTerrainPixels: 0,
+  mCloudsPixels: 0,
+  mTrackPixels: 0,
 
   mTerrainOffset: vec2New(),
   mCloudsOffset: vec2New(),
@@ -416,9 +416,9 @@ const renderUpdateTanTable = (size: number, tanHalfFov: number, outArray: number
 };
 
 export const renderAssignPlanes = (
-  trackPixels: Uint32Array | null,
-  cloudsPixels: Uint32Array | null,
-  terrainPixels: Uint32Array | null,
+  trackPixels: Uint32Array | 0,
+  cloudsPixels: Uint32Array | 0,
+  terrainPixels: Uint32Array | 0,
   trackWidth: number,
   cloudsWidth: number,
   terrainWidth: number,

@@ -1,5 +1,5 @@
 import { Game } from "../game";
-import { kMathEpsilon, mathAbs, mathAtan2, mathClamp, mathCos, mathJs, mathLerpAngle, mathMax, mathMin, mathRandom, mathSin, splineCalculateSegmentPoint, splineCalculateSegmentTangent, vec2Add, vec2Copy, vec2Distance, vec2DistanceSqr, vec2Dot, vec2LengthSqr, vec2Lerp, vec2MulScalar, vec2New, vec2NewCopy, vec2Normalize, vec2Sub, type Vec2 } from "../math";
+import { kMathEpsilon, mathAbs, mathAtan2, mathClamp, mathCos, mathLerpAngle, mathMax, mathMin, mathRandom, mathSin, splineCalculateSegmentPoint, splineCalculateSegmentTangent, vec2Add, vec2Copy, vec2Distance, vec2DistanceSqr, vec2Dot, vec2LengthSqr, vec2Lerp, vec2MulScalar, vec2New, vec2NewCopy, vec2Normalize, vec2Sub, type Vec2 } from "../math";
 import { windowAddEventListener, windowRemoveEventListener } from "../sys/window";
 import type { Racer } from "./racer";
 import { trackGetTrackWidthAt, trackWrapSegmentIndex } from "./track";
@@ -7,7 +7,7 @@ import { trackGetTrackWidthAt, trackWrapSegmentIndex } from "./track";
 type KeyBoardEventListener = (event: KeyboardEvent) => void;
 
 interface PlayerInputState {
-  mEventListeners: { [event: string]: KeyBoardEventListener | undefined };
+  mEventListeners: { [event: string]: KeyBoardEventListener | 0 };
   mPressed: { mUp: boolean; mDown: boolean; mLeft: boolean; mRight: boolean; mGallop: boolean; };
   mDirection: Vec2;
   mGallopingTimer: number;
@@ -108,7 +108,7 @@ const controllerTranslatePlayerDirection = (x: number, y: number, racer: Racer, 
 
 export const controllerReset = (self: Controller) => {
   self.mPreviousSegmentIdx = -1;
-  
+
   self.mPreviousSegmentT = self.mBlockPlayerTimer =
   self.mGallopingReactionTimer = self.mReactionTimer = 0;
 
@@ -238,11 +238,11 @@ export const controllerSetupPlayerInput = (self: Controller) => {
 export const controllerRemovePlayerInput = () => {
   if (playerInputState.mEventListeners['keydown']) {
     windowRemoveEventListener('keydown', playerInputState.mEventListeners['keydown']);
-    playerInputState.mEventListeners['keydown'] = undefined;
+    playerInputState.mEventListeners['keydown'] = 0;
   }
   if (playerInputState.mEventListeners['keyup']) {
     windowRemoveEventListener('keyup', playerInputState.mEventListeners['keyup']);
-    playerInputState.mEventListeners['keyup'] = undefined;
+    playerInputState.mEventListeners['keyup'] = 0;
   }
 };
 
