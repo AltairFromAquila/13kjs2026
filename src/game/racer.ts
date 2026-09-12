@@ -1,5 +1,5 @@
 import type { Renderable } from "../core/render";
-import { racerAnimations, racerMirrorNodes, type SkeletonNode, type SkeletonNodeShapes } from "../data/racer.data";
+import { racerAnimations, racerMirrorNodes, type RacerData, type SkeletonNode, type SkeletonNodeShapes } from "../data/racer.data";
 import { easeOutCubic } from "../easing";
 import { Game } from "../game";
 import { kMathEpsilon, kMathHalfPi, kMathPi, kMathTau, mathAbs, mathAtan2, mathCeil, mathClamp, mathCos, mathHypot, mathJs, mathLerp, mathMax, mathMin, mathMod, mathPingPong, mathRandom, mathSin, mathSqrt, splineCalculateSegmentPoint, splineCalculateSegmentTangent, vec2Add, vec2ClampLength, vec2Copy, vec2CopyFromTuple, vec2Dot, vec2Length, vec2LengthSqr, vec2MulScalar, vec2New, vec2NewCopy, vec2Normalize, type Vec2 } from "../math";
@@ -60,8 +60,7 @@ interface TransformedRacerNodeShape {
 type TransformedRacerNodeEntry = TransformedRacerNode | TransformedRacerNodeShape;
 
 export interface Racer extends Renderable, PhysicEntity {
-  mSkeleton: SkeletonNode[];
-  mSkeletonShapes: SkeletonNodeShapes;
+  mData: RacerData;
 
   mController: Controller;
 
@@ -87,7 +86,7 @@ export interface Racer extends Renderable, PhysicEntity {
   mPoints: number;
 }
 
-export const racerNew = (skeleton: SkeletonNode[], skeletonShapes: SkeletonNodeShapes): Racer => ({
+export const racerNew = (data: RacerData): Racer => ({
   mPos: vec2New(),
   mScreenPos: vec2New(),
   mAngle: 0,
@@ -98,8 +97,7 @@ export const racerNew = (skeleton: SkeletonNode[], skeletonShapes: SkeletonNodeS
   mVel: vec2New(),
   mColVel: vec2New(),
 
-  mSkeleton: skeleton,
-  mSkeletonShapes: skeletonShapes,
+  mData: data,
 
   mTrackPoints: {},
   mLastValidPathIdx: -1,
@@ -380,10 +378,6 @@ export const racerTick = (self: Racer, delta: number) => {
     self.mAnimSpeed = mathLerp(0.4, 1, mathRandom());
   }
 
-  // if (Game.mRacers[0] === self) {
-  //   console.log(self.mAnimSpeed);
-  // }
-
   self.mAnimTime = (self.mAnimTime + (delta * self.mAnimSpeed)) % 1; // All animations have a total duration of 1.0, so we can wrap the time to stay within that range.
 };
 
@@ -393,6 +387,8 @@ export const racerRender = (
   x: number, y: number, invZ: number,
   angle: number, scale: number, alpha: number
 ) => {
+  const skeleton = self.mData[1];
+  const skeletonShapes = self.mData[2];
   const dir = (mathAbs(angle) < kMathHalfPi) ? 1 : -1;
 
   const getAnimatedAngle = (partId: number) =>{
@@ -447,8 +443,8 @@ export const racerRender = (
     animSin: number, animCos: number,
     parentPart: number
   ) => {
-    const localX = x - (self.mSkeleton[parentPart]?.[0] ?? 0);
-    const localY = y - (self.mSkeleton[parentPart]?.[1] ?? 0);
+    const localX = x - (skeleton[parentPart]?.[0] ?? 0);
+    const localY = y - (skeleton[parentPart]?.[1] ?? 0);
     const parentAnimatedPos = workTransformedNodes[parentPart]?.mAnimPos ?? vec2New();
 
     return [
@@ -491,8 +487,8 @@ export const racerRender = (
   };
 
   let shapeIdx = 0;
-  for (let i = 0; i < self.mSkeleton.length; ++i) {
-    const skelNode = self.mSkeleton[i];
+  for (let i = 0; i < skeleton.length; ++i) {
+    const skelNode = skeleton[i];
     const parentPart = skelNode[7];
     const parentAnimAngle = workTransformedNodes[parentPart]?.mAngle ?? 0;
     const animAngle = getAnimatedAngle(i) + parentAnimAngle;
@@ -515,7 +511,7 @@ export const racerRender = (
 
     insertSorted(transNode);
 
-    const shape = self.mSkeletonShapes[i];
+    const shape = skeletonShapes[i];
     if (shape) {
       let workIdx = 0;
 
@@ -568,7 +564,7 @@ export const racerRender = (
   // #region Draw skeleton
   for (const node of nodeSet) {
     if (node.mType === 1) {
-      ctxSetFillStyle(ctx, self.mSkeletonShapes[node.mRef][3]);
+      ctxSetFillStyle(ctx, skeletonShapes[node.mRef][3]);
       ctxBeginPath(ctx);
 
       node.mPoints.forEach((point, idx) => {
@@ -582,7 +578,7 @@ export const racerRender = (
 
       ctxClosePathAndFill(ctx);
     } else {
-      const skelNode = self.mSkeleton[node.mRef];
+      const skelNode = skeleton[node.mRef];
       const [sx, sy] = toScreen(node.mPos);
       const radius = skelNode[3] * scale;
       const color = skelNode[5];
@@ -594,7 +590,7 @@ export const racerRender = (
         const dy = sy - psy;
         const len = mathHypot(dx, dy);
 
-        const parentSkelNode = self.mSkeleton[parent];
+        const parentSkelNode = skeleton[parent];
         const parentRadius = parentSkelNode[3] * scale;
         if (len < kMathEpsilon) {
           drawCircle(psx, psy, mathMax(radius, parentRadius), color);

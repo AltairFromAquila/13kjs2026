@@ -11,6 +11,8 @@ export type AnimationFrames = {
   [patId: number]: (number | ((v: number) => number))[];
 };
 
+export type RacerData = [string, SkeletonNode[], SkeletonNodeShapes];
+
 export const racerAnimations: AnimationFrames[] = [
   {}, // Base pose
   {   // Staing still
@@ -369,3 +371,38 @@ export const racerDataGetSkeletonShapes = (
     colorHoof,
   ],
 });
+
+export const racerData: RacerData[] = [
+  [
+    'Rufus',
+    racerDataGetSkeleton('#faa', '#000', '#b44', '#ff7', '#ff0'), racerDataGetSkeletonShapes('#faa', '#b44')
+  ],
+  [
+    'Bowie',
+    racerDataGetSkeleton('#ffa', '#000', '#bb4', '#ccc', '#fff'), racerDataGetSkeletonShapes('#ffa', '#bb4')
+  ],
+  [
+    'Ewan',
+    racerDataGetSkeleton('#afa', '#000', '#4b4', '#fc5', '#fa0'), racerDataGetSkeletonShapes('#afa', '#4b4')
+  ],
+  [
+    'Skye',
+    racerDataGetSkeleton('#aff', '#000', '#4bb', '#56f', '#56a'), racerDataGetSkeletonShapes('#aff', '#4bb')
+  ],
+  [
+    'Ailish',
+    racerDataGetSkeleton('#aaf', '#000', '#44b', '#b5f', '#b5a'), racerDataGetSkeletonShapes('#aaf', '#44b')
+  ],
+  [
+    'Heather',
+    racerDataGetSkeleton('#faf', '#000', '#b4b', '#f77', '#f00'), racerDataGetSkeletonShapes('#faf', '#b4b')
+  ],
+  [
+    'Iris',
+    racerDataGetSkeleton('#fff', '#0af', '#aaa', '#ffc', '#ff7'), racerDataGetSkeletonShapes('#fff', '#aaa')
+  ],
+  [
+    'Volker',
+    racerDataGetSkeleton('#444', '#fff', '#000', '#f55', '#f00'), racerDataGetSkeletonShapes('#444', '#000')
+  ]
+]

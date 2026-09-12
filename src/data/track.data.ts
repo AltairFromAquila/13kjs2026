@@ -1,4 +1,3 @@
-import { renderGetCloudsOffsetRef } from "../core/render";
 import { kCloudsNoiseWidth } from "../game/clouds";
 import { terrainGenerate } from "../game/terrain";
 import { waterGenerate } from "../game/water";
@@ -56,7 +55,7 @@ export const tracks: TrackRawData[] = [
       // ]
     ],
     mMetadata: [
-      'Mistic Forest',
+      'Mystic Forest',
       0xffbb55,
       () => terrainGenerate(
         [
@@ -125,8 +124,7 @@ export const tracks: TrackRawData[] = [
       1120, 1900, 80
     ],
     mMetadata: [
-      'Dunes #57ffd5', // rgb(231, 160, 5) rgb(250, 189, 23) rgb(250, 216, 23) rgb(253, 231, 32)
-      // 0x3daefa,
+      'Dunes',
       0xd6fc66,
       () => terrainGenerate(
         [
@@ -164,7 +162,7 @@ export const tracks: TrackRawData[] = [
       1524, 710, 80
     ],
     mMetadata: [
-      'Hills',
+      'Haunted Hills',
       0xa3804b,
       () => terrainGenerate(
         [
@@ -209,7 +207,7 @@ export const tracks: TrackRawData[] = [
       1560, 2235, 70
     ],
     mMetadata: [
-      'Cold Mist',
+      'Icy Mist',
       0xc382df,
       () => terrainGenerate(
         [

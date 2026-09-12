@@ -1,5 +1,5 @@
 import { render, renderAssignPlanes, renderGetCloudsOffsetRef, renderGetTerrainOffsetRef, renderSetColors, renderSetFogValues, type RenderableCommand } from "./core/render";
-import { racerDataGetSkeleton, racerDataGetSkeletonShapes } from "./data/racer.data";
+import { racerData } from "./data/racer.data";
 import { tracks, type TrackMetadata } from "./data/track.data";
 import { cloudsGenerate, cloudsGetPixels, kCloudsNoiseWidth } from "./game/clouds";
 import { racerFixedTick, racerNew, racerRender, racerReset, racerSetAngleFromVector, racerSetupTrackPoints, racerTick, type Racer } from "./game/racer";
@@ -7,7 +7,7 @@ import { Track, trackDrawTexture, trackGetStartPositions, trackLoadData } from "
 import { mathCeil, mathLerp, mathMin, mathRandom, mathTan, vec2Add, vec2Copy, vec2MulScalar, vec2New } from "./math";
 import { cameraFreeCamNew, cameraSetupFreeCamEvents, cameraHandleFreeCamInput, type FreeCamera, cameraGameCamNew, cameraGameCamTick, type GameCamera, cameraGameCamSetupIntro } from "./game/camera";
 import { kVerticalFov, type Camera } from "./core/camera";
-import { uiCalculateResults, uiFadeIn, uiFadeOut, uiRenderGame, uiResetGame } from "./game/ui";
+import { uiCalculateResults, uiFadeIn, uiFadeOut, uiRemovePlayerInput, uiRenderGame, uiRenderMenu, uiReset, uiSetupPlayerInput } from "./game/ui";
 import { controllerProcessAIForRacer, controllerProcessPlayerInput, controllerSetupPlayerInput } from "./game/controllers";
 import { collisionActivateEntity } from "./game/collision";
 import { kTerrainWidth } from "./game/terrain";
@@ -27,6 +27,7 @@ export interface Game {
   mProcess: (self: Game, delta: number) => void;
   mAccTime: number;
 
+  mDifficulty: number;
   mGameMode: number;
   mSequenceTimer: number;
 
@@ -129,47 +130,29 @@ const processWithFixed = (self: Game, delta: number) => {
   processDefault(self, delta);
 }
 
+const processMenu = (self: Game, delta: number) => {
+  racerTick(self.mRacers[0], delta);
+  uiRenderMenu(delta);
+}
+
 export const Game: Game = {
-  mProcess: processDefault,
+  mProcess: processMenu,
   mAccTime: 0,
+  mDifficulty: 1,
   mGameMode: kGameModeRaceIntro,
   mSequenceTimer: 0,
   mTrack: new Track(),
   mTrackMetadata: tracks[0].mMetadata,
   mCurrentTrack: 0,
   mRacers: [
-    racerNew(
-      racerDataGetSkeleton('#faa', '#000', '#b44', '#ff7', '#ff0'),
-      racerDataGetSkeletonShapes('#faa', '#b44')
-    ),
-    racerNew(
-      racerDataGetSkeleton('#ffa', '#000', '#bb4', '#ccc', '#fff'),
-      racerDataGetSkeletonShapes('#ffa', '#bb4')
-    ),
-    racerNew(
-      racerDataGetSkeleton('#afa', '#000', '#4b4', '#fc5', '#fa0'),
-      racerDataGetSkeletonShapes('#afa', '#4b4')
-    ),
-    racerNew(
-      racerDataGetSkeleton('#aff', '#000', '#4bb', '#56f', '#56a'),
-      racerDataGetSkeletonShapes('#aff', '#4bb')
-    ),
-    racerNew(
-      racerDataGetSkeleton('#aaf', '#000', '#44b', '#b5f', '#b5a'),
-      racerDataGetSkeletonShapes('#aaf', '#44b')
-    ),
-    racerNew(
-      racerDataGetSkeleton('#faf', '#000', '#b4b', '#f77', '#f00'),
-      racerDataGetSkeletonShapes('#faf', '#b4b')
-    ),
-    racerNew(
-      racerDataGetSkeleton('#fff', '#0af', '#aaa', '#ffc', '#ff7'),
-      racerDataGetSkeletonShapes('#fff', '#aaa')
-    ),
-    racerNew(
-      racerDataGetSkeleton('#444', '#fff', '#000', '#f55', '#f00'),
-      racerDataGetSkeletonShapes('#444', '#000')
-    ),
+    racerNew(racerData[0]),
+    racerNew(racerData[1]),
+    racerNew(racerData[2]),
+    racerNew(racerData[3]),
+    racerNew(racerData[4]),
+    racerNew(racerData[5]),
+    racerNew(racerData[6]),
+    racerNew(racerData[7]),
   ],
   mRacersOrdered: [],
   mRacersStandings: [],
@@ -181,6 +164,41 @@ export const Game: Game = {
     mAlpha: 0,
     mCommand: racerRender,
   }
+}
+
+const gameRandomizeComputerRacersData = () => {
+  const playerRacer = Game.mRacers[0];
+  const computerRacers = Game.mRacers.slice(1);
+  const availableData = racerData.filter(data => data !== playerRacer.mData);
+
+  for (let idx = availableData.length - 1; idx > 0; --idx) {
+    const randomIdx = (mathRandom() * (idx + 1)) | 0;
+    const temp = availableData[idx];
+    availableData[idx] = availableData[randomIdx];
+    availableData[randomIdx] = temp;
+  }
+
+  for (let idx = 0; idx < computerRacers.length && idx < availableData.length; ++idx) {
+    computerRacers[idx].mData = availableData[idx];
+  }
+}
+
+export const gameStartGame = () => {
+  gameRandomizeComputerRacersData();
+  Game.mRacers.forEach(racer => {
+    racer.mPoints = 0;
+  });
+  gameGoToTrack(0);
+}
+
+export const gameGoToMenu = () => {
+  Game.mSequenceTimer = 0;
+  Game.mGameMode = kGameModeRaceMenu;
+
+  Game.mProcess = processMenu;
+  uiSetupPlayerInput();
+  uiReset();
+  uiFadeIn();
 }
 
 export const gameGoToTrack = (trackIdx: number) => {
@@ -241,9 +259,14 @@ export const gameGoToTrack = (trackIdx: number) => {
   Game.mRenderRacerCmd.mAlpha = 0;
   Game.mProcess = processDefault;
   cameraGameCamSetupIntro(Game.mCamera as GameCamera);
-  uiResetGame();
+  uiReset();
   uiFadeIn();
 };
+
+export const gameGoToFinal = () => {
+  Game.mSequenceTimer = 0;
+  Game.mGameMode = kGameModeRaceFinalResult;
+}
 
 export const gameInit = () => {
   cloudsGenerate();
@@ -258,5 +281,6 @@ export const gameInit = () => {
   (Game.mCamera as GameCamera).mTarget = Game.mRacers[0];
   controllerSetupPlayerInput(Game.mRacers[0].mController);
 
-  gameGoToTrack(0);
+  // gameGoToTrack(0);
+  gameGoToMenu();
 }
