@@ -15,7 +15,6 @@ const kWaterWidth = 512 as const;
 const kWaterMask = kWaterWidth - 1;
 
 const {
-  mCanvas: gWaterCanvas,
   mCtx: gWaterCtx,
 } = ctxCreateOffscreenCanvas(kWaterWidth, kWaterWidth, false, true);
 const {
@@ -24,14 +23,10 @@ const {
 } = ctxGetCanvasImageData(kWaterWidth, kWaterWidth, gWaterCtx);
 
 const kCircleData = (() => {
-  const bytesRaw = atob("+zVvNN4mEChTOPYk4TYPO/MlITmQOQkifyMRLasnBTdQNmcnRzsGO0on9jR+OZQibjtGMskjnSnyOuAm8DQ9MiEgmTUyN8EgwSmhO+wliS8HOL8jgjjXM3wniTijOwYhRSpuMpMkjjgAOccixjSwOdwhBjssOpwa1TAFNm0YqS9WOGEiCTm7NBYlWjVDNMokWDu/O68kuTsKOIAeHjjsOmMerzlQKZwatjmeOIUl/jmdNqwh+yssOwwm2DuVN98dLjk8OdUkNjnaO0gf3TYeNqYnfjoBOXAZajbvOfwcTTWyNiAeKDs2LMkfMziUOEMj6DZKO3UlRDlJOxISHjjJM+4mYyYMNH0gBTiQNwEmjDnnNlAmpDYTO/UmxTCYNhcdRTguO6oePSmsOuYkHDkrOUclSDm7O3sdHDiNMNQc9S8nOcgU/TusOH8hKTt3M9Ue4jN2OTcc4Cw6MXkjmDtsOiohrzdKMqQhLTtuOicjsDQbOs0dXy6EL3QgCzbfGnceDThAOGAjijYoOz8mmDDQOkkcxy3RMZMhPzpQNt4cxTQBOaka/TK3OXAWRTkbMaAY5juwMGInIDMHNI8THTE5ODMe");
-  const bytes = new Uint8Array(bytesRaw.length);
-
-  for (let i = 0; i < bytes.length; ++i) {
-    bytes[i] = bytesRaw.charCodeAt(i);
-  }
-
-  return new Float16Array(bytes.buffer, bytes.byteOffset, bytes.byteLength >> 1);
+  const raw = atob("+zVvNN4mEChTOPYk4TYPO/MlITmQOQkifyMRLasnBTdQNmcnRzsGO0on9jR+OZQibjtGMskjnSnyOuAm8DQ9MiEgmTUyN8EgwSmhO+wliS8HOL8jgjjXM3wniTijOwYhRSpuMpMkjjgAOccixjSwOdwhBjssOpwa1TAFNm0YqS9WOGEiCTm7NBYlWjVDNMokWDu/O68kuTsKOIAeHjjsOmMerzlQKZwatjmeOIUl/jmdNqwh+yssOwwm2DuVN98dLjk8OdUkNjnaO0gf3TYeNqYnfjoBOXAZajbvOfwcTTWyNiAeKDs2LMkfMziUOEMj6DZKO3UlRDlJOxISHjjJM+4mYyYMNH0gBTiQNwEmjDnnNlAmpDYTO/UmxTCYNhcdRTguO6oePSmsOuYkHDkrOUclSDm7O3sdHDiNMNQc9S8nOcgU/TusOH8hKTt3M9Ue4jN2OTcc4Cw6MXkjmDtsOiohrzdKMqQhLTtuOicjsDQbOs0dXy6EL3QgCzbfGnceDThAOGAjijYoOz8mmDDQOkkcxy3RMZMhPzpQNt4cxTQBOaka/TK3OXAWRTkbMaAY5juwMGInIDMHNI8THTE5ODMe");
+  const b = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; ++i) b[i] = raw.charCodeAt(i);
+  return new Float16Array(b.buffer, b.byteOffset, raw.length >> 1);
 })();
 
 const waterCircle = (x: number, y: number, cx: number, cy: number, size: number) => {
@@ -55,11 +50,11 @@ const waterLayer = (x: number, y: number) => {
 };
 
 const waterSample = (
-  u: number, v: number, _phase: number,
+  u: number, v: number,
   waterColor: Color, botWaterColor: Color, foamColor: Color
 ) => {
-  let ux = u * 12;
-  let uy = v * 12;
+  const ux = u * 12;
+  const uy = v * 12;
 
   const t1 = waterLayer(ux, uy);
   const firstMix = colorBlend(waterColor, botWaterColor, t1);
@@ -73,7 +68,7 @@ export const waterGenerate = (waterColor: Color, botWaterColor: Color, foamColor
     for (let x = 0; x < kWaterWidth; ++x) {
       const u = x / kWaterWidth;
       const v = y / kWaterWidth;
-      const color = waterSample(u, v, 0, waterColor, botWaterColor, foamColor);
+      const color = waterSample(u, v, waterColor, botWaterColor, foamColor);
       const packed = colorPack(color.r, color.g, color.b, 255);
 
       gWaterPixels[(y * kWaterWidth) + x] = packed;
