@@ -41,7 +41,6 @@ export interface Track {
 export const kTrackTextureSize = 4096;
 
 const {
-  mCanvas: gTrackCanvas,
   mCtx: gTrackCtx,
 } = ctxCreateOffscreenCanvas(kTrackTextureSize, kTrackTextureSize, true, true);
 

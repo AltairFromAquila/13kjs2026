@@ -1,6 +1,5 @@
 import { kCloudsNoiseWidth } from "../game/clouds";
 import { terrainGenerate } from "../game/terrain";
-import { waterGenerate } from "../game/water";
 import { colorUnpack, kMathTau, mathSin, type Vec2 } from "../math";
 
 export interface TrackRawData {
@@ -89,10 +88,12 @@ export const tracks: TrackRawData[] = [
     mMetadata: [
       'Atlantis',
       0xffd56a,
-      () => waterGenerate(
-        colorUnpack(0xffddaa02),
-        colorUnpack(0xffb36f02),
-        colorUnpack(0xfff6f5cf)
+      () => terrainGenerate(
+        [
+          { mHeight: 0, mColor: colorUnpack(0xffb36f02) },
+          { mHeight: 9, mColor: colorUnpack(0xffddaa02) },
+          { mHeight: 10, mColor: colorUnpack(0xfff6f5cf) }
+        ], 16
       ),
       1, 0, 9, 2,
       (cloudsOffset: Vec2, waterOffset: Vec2, delta: number) => (moveClouds(cloudsOffset, delta), moveWater(waterOffset, delta))
@@ -261,10 +262,14 @@ export const tracks: TrackRawData[] = [
     mMetadata: [
       "Dragon's Lair",
       0x2337a5,
-      () => waterGenerate(
-        colorUnpack(0xff0202b2),
-        colorUnpack(0xff000080),
-        colorUnpack(0xff008ee8)
+      () => terrainGenerate(
+        [
+          { mHeight: 0, mColor: colorUnpack(0xff00006d) },
+          { mHeight: 2, mColor: colorUnpack(0xff0202b2) },
+          { mHeight: 6, mColor: colorUnpack(0xff000080) },
+          { mHeight: 9, mColor: colorUnpack(0xff008ee8) },
+          { mHeight: 10, mColor: colorUnpack(0xff008ee8) }
+        ], 16
       ),
       2, 1, 3, 2,
       (cloudsOffset: Vec2, waterOffset: Vec2, delta: number) => (moveClouds(cloudsOffset, delta), moveWater(waterOffset, delta))

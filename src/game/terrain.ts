@@ -9,7 +9,6 @@ export type TerrainColorStops = {
 export const kTerrainWidth = 512 as const;
 
 const {
-  mCanvas: gTerrainCanvas,
   mCtx: gTerrainCtx,
 } = ctxCreateOffscreenCanvas(kTerrainWidth, kTerrainWidth, false, true);
 const {

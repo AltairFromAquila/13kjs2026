@@ -5,7 +5,6 @@ export const kCloudsNoiseWidth = 512 as const;
 const kBaseNoiseWidth = 16 as const;
 
 const {
-  mCanvas: gCloudsCanvas,
   mCtx: gCloudsCtx,
 } = ctxCreateOffscreenCanvas(kCloudsNoiseWidth, kCloudsNoiseWidth, true, true);
 const {
