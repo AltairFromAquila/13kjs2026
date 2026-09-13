@@ -13,6 +13,7 @@
     "deps:ect:dry": "node scripts/install-ect.mjs --dry-run",
     "deps:install": "npm run deps:advcomp && npm run deps:ect",
     "prepare:files": "node scripts/prepare-files.mjs",
+    "embed:js": "node scripts/embed-js.mjs",
     "compress:zip": "node scripts/compress.mjs"
   },
   "devDependencies": {
