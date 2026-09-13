@@ -1,7 +1,8 @@
 import type { Renderable } from "../core/render";
+import { difficultyData } from "../data/difficulty.data";
 import { racerAnimations, racerMirrorNodes, type RacerData } from "../data/racer.data";
 import { easeOutCubic } from "../easing";
-import { Game } from "../game";
+import { Game, kGameModeRaceRacing } from "../game";
 import { kMathEpsilon, kMathHalfPi, kMathPi, kMathTau, mathAbs, mathAtan2, mathCeil, mathClamp, mathCos, mathHypot, mathLerp, mathMax, mathMin, mathMod, mathPingPong, mathRandom, mathSin, mathSqrt, splineCalculateSegmentPoint, splineCalculateSegmentTangent, vec2Add, vec2ClampLength, vec2Copy, vec2CopyFromTuple, vec2Dot, vec2LengthSqr, vec2MulScalar, vec2New, vec2NewCopy, vec2Normalize, type Vec2 } from "../math";
 import { ctxBeginPath, ctxClosePathAndFill, ctxLineTo, ctxMoveTo, ctxSetFillStyle, ctxSetGlobalAlpha } from "../sys/context";
 import { collisionNewCircleCollider, collisionResolveCollisions, collisionSyncColliders, type PhysicEntity } from "./collision";
@@ -171,21 +172,25 @@ export const racerFixedTick = (self: Racer, delta: number) => {
 
   const prevPos = vec2NewCopy(self.mPos);
 
-  self.mTotalTime += delta;
-  self.mLapTime += delta;
+  if (Game.mGameMode === kGameModeRaceRacing) {
+    self.mTotalTime += delta;
+    self.mLapTime += delta;
+  }
 
   const speedSqr = vec2LengthSqr(self.mVel);
   const maxJogSpeedSqr = kRacerMaxJogSpeed * kRacerMaxJogSpeed;
 
   if (self.mController.mIsGalloping) {
-    const staminaDrainRate = mathLerp(0, 0.1, mathMin(speedSqr / maxJogSpeedSqr, 1));
+    const staminaDrainRateMaxValue = controllerIsPlayerControlled(self.mController) ? 0.1 : difficultyData[Game.mDifficulty][1];
+    const staminaDrainRate = mathLerp(0, staminaDrainRateMaxValue, mathMin(speedSqr / maxJogSpeedSqr, 1));
     self.mStamina -= delta * staminaDrainRate; // Decrease stamina continuously while galloping
 
     if (self.mStamina < 0) {
       self.mStamina = 0;
     }
   } else if (self.mStamina < 1) {
-    self.mStamina += delta * 0.2; // Regenerate stamina while not galloping
+    const staminaRegenRateMaxValue = controllerIsPlayerControlled(self.mController) ? 0.2 : difficultyData[Game.mDifficulty][2];
+    self.mStamina += delta * staminaRegenRateMaxValue; // Regenerate stamina while not galloping
     if (self.mStamina > 1) {
       self.mStamina = 1;
     }

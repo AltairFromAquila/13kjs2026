@@ -1,3 +1,4 @@
+import { difficultyData } from "../data/difficulty.data";
 import { Game } from "../game";
 import { kMathEpsilon, mathAbs, mathAtan2, mathClamp, mathCos, mathLerpAngle, mathMax, mathMin, mathRandom, mathSin, splineCalculateSegmentPoint, splineCalculateSegmentTangent, vec2Add, vec2Copy, vec2Distance, vec2DistanceSqr, vec2Dot, vec2LengthSqr, vec2Lerp, vec2MulScalar, vec2New, vec2NewCopy, vec2Normalize, vec2Sub, type Vec2 } from "../math";
 import { kWindowEventKeyDown, kWindowEventKeyUp, windowAddEventListener, windowRemoveEventListener } from "../sys/window";
@@ -346,7 +347,7 @@ export const controllerProcessAIForRacer = (self: Controller, racer: Racer, delt
       }
 
       if (self.mIsGalloping) {
-        self.mGallopTapPressed = !wasGalloping || mathRandom() < 0.5;
+        self.mGallopTapPressed = !wasGalloping || mathRandom() < difficultyData[Game.mDifficulty][3];
       }
     }
 
@@ -356,7 +357,7 @@ export const controllerProcessAIForRacer = (self: Controller, racer: Racer, delt
   if (self.mReactionTimer > 0) return;
 
   const trackPoint = racer.mTrackPoints[-1];
-  const playerRacer = Game.mRacers[0]; // Player should always be the first racer in the array
+  const playerRacer = Game.mPlayerRacer;
 
   if (self.mBlockPlayerTimer <= 0 && racer != playerRacer) {
     const playerTrackPoint = playerRacer.mTrackPoints[-1];
@@ -372,9 +373,9 @@ export const controllerProcessAIForRacer = (self: Controller, racer: Racer, delt
     if (
       playerDistanceSqr < (isPlayerAhead ? 240 * 240 : 64 * 64) &&
       playerDistanceSqr > (32 * 32) &&
-      mathRandom() < kAIBlockPlayerChance
+      mathRandom() < difficultyData[Game.mDifficulty][0]
     ) {
-      self.mIsBlockingPlayer = mathRandom() < kAIBlockPlayerChance;
+      self.mIsBlockingPlayer = mathRandom() < difficultyData[Game.mDifficulty][0];
     }
 
     self.mBlockPlayerTimer = 1 + (mathRandom() * 4);
@@ -492,7 +493,7 @@ export const controllerProcessAIForRacer = (self: Controller, racer: Racer, delt
 
   if (self.mWasStuck) {
     self.mWasStuck = false;
-  } else if (vec2Dot(racer.mVel, racer.mVel) > 0) {
+  } else if (vec2LengthSqr(racer.mVel) > 0) {
     const velDir = vec2Normalize(vec2NewCopy(racer.mVel));
     const velAlignment = vec2Dot(self.mDesiredDirection, velDir);
     const velAlignmentRatio = (velAlignment - 1) * -0.5; // remap to [0, 1] range, where 0 is same direction, 1 is opposite direction

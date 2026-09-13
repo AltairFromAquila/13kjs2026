@@ -57,7 +57,7 @@ export const uiCalculateResults = () => {
       gResultsTimes[i] = r.mTotalTime - r.mLapTime;
 
       const nextRacer = i + 1;
-      if (r === Game.mRacers[0] && nextRacer < Game.mRacersOrdered.length) {
+      if (r === Game.mPlayerRacer && nextRacer < Game.mRacersOrdered.length) {
         const r2 = Game.mRacersOrdered[nextRacer];
         const lapDelta = 4 - r2.mLap;
         const calculatedETA = r2.mBestLapTime
@@ -95,7 +95,7 @@ export const uiSetupPlayerInput = () => {
           Game.mDifficulty = mathMod(Game.mDifficulty - 1, 3);
         } else {
           gRacerSelection = mathMod(gRacerSelection - 1, 8);
-          Game.mRacers[0].mData = racerData[gRacerSelection];
+          Game.mPlayerRacer.mData = racerData[gRacerSelection];
         }
         break;
       case "KeyD":
@@ -104,7 +104,7 @@ export const uiSetupPlayerInput = () => {
           Game.mDifficulty = mathMod(Game.mDifficulty + 1, 3);
         } else {
           gRacerSelection = mathMod(gRacerSelection + 1, 8);
-          Game.mRacers[0].mData = racerData[gRacerSelection];
+          Game.mPlayerRacer.mData = racerData[gRacerSelection];
         }
         break;
       case "KeyK":
@@ -132,7 +132,7 @@ export const uiRenderGame = (delta: number) => {
   const width = ctx.canvas.width;
   const height = ctx.canvas.height;
   const scale = (height > 720) ? 1.5 : 1;
-  const playerRacer = Game.mRacers[0];
+  const playerRacer = Game.mPlayerRacer;
 
   const drawTimeElement = (
     msText: string, sText: string, mText: string,
@@ -286,7 +286,7 @@ export const uiRenderGame = (delta: number) => {
     ctxSetGlobalAlpha(1);
   } else if (Game.mGameMode === kGameModeRaceFinalResult) {
     if (Game.mSequenceTimer > 1) {
-      const playerPosition = Game.mRacersOrdered.indexOf(playerRacer) + 1;
+      const playerPosition = Game.mRacersStandings.indexOf(playerRacer) + 1;
 
       gUIControlValue1 += delta;
       if (gUIControlValue1 > 11) {
@@ -581,7 +581,7 @@ export const uiRenderMenu = (delta: number) => {
   ctx.fillRect(-250, 150, 500, 75);
 
   racerRender(
-    Game.mRacers[0],
+    Game.mPlayerRacer,
     ctx,
     -5, 35, 0, racerAngle, 10, 1
   );
@@ -598,7 +598,7 @@ export const uiRenderMenu = (delta: number) => {
   ctxSetFillStyle('#fff');
   ctxSetGlobalAlpha(1);
 
-  ctxFillText(Game.mRacers[0].mData[0], 0, 142);
+  ctxFillText(Game.mPlayerRacer.mData[0], 0, 142);
 
   ctxSetFillStyle((Game.mDifficulty === 0) ? `hsl(${gTextHue}, 100%, 85%)` : '#fff');
   ctxFillText('Easy', -120, 270);

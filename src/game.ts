@@ -33,13 +33,14 @@ export interface Game {
   mGameMode: number;
   mSequenceTimer: number;
 
-  // TODO: Refactor later
   mTrack: Track;
   mTrackMetadata: TrackMetadata;
   mCurrentTrack: number;
   mRacers: Racer[];
   mRacersOrdered: Racer[];
   mRacersStandings: Racer[];
+
+  mPlayerRacer: Racer;
 
   mCamera: Camera;
 
@@ -97,9 +98,9 @@ const processDefault = (self: Game, delta: number) => {
       return self.mRacers.indexOf(a) - self.mRacers.indexOf(b);
     });
 
-    if (self.mRacers[0].mLap > 3) {
+    if (self.mPlayerRacer.mLap > 3) {
       self.mGameMode = kGameModeRaceResults;
-      Game.mRacers[0].mController.mProcessFunction = controllerProcessAIForRacer;
+      Game.mPlayerRacer.mController.mProcessFunction = controllerProcessAIForRacer;
 
       self.mRacersOrdered.forEach((r, i) => {
         r.mPoints += kGamePointTable[i];
@@ -132,7 +133,7 @@ const processWithFixed = (self: Game, delta: number) => {
 }
 
 const processMenu = (self: Game, delta: number) => {
-  racerTick(self.mRacers[0], delta);
+  racerTick(self.mPlayerRacer, delta);
   uiRenderMenu(delta);
 }
 
@@ -157,6 +158,7 @@ export const Game: Game = {
   ],
   mRacersOrdered: [],
   mRacersStandings: [],
+  mPlayerRacer: 0 as any,
   mCamera: cameraGameCamNew(),
   mRenderRacerCmd: {
     mRenderables: [],
@@ -167,9 +169,8 @@ export const Game: Game = {
 }
 
 const gameRandomizeComputerRacersData = () => {
-  const playerRacer = Game.mRacers[0];
   const computerRacers = Game.mRacers.slice(1);
-  const availableData = racerData.filter(data => data !== playerRacer.mData);
+  const availableData = racerData.filter(data => data !== Game.mPlayerRacer.mData);
 
   for (let idx = availableData.length - 1; idx > 0; --idx) {
     const randomIdx = (mathRandom() * (idx + 1)) | 0;
@@ -253,7 +254,7 @@ export const gameGoToTrack = (trackIdx: number) => {
     }
   }
 
-  Game.mRacers[0].mController.mProcessFunction = controllerProcessPlayerInput;
+  Game.mPlayerRacer.mController.mProcessFunction = controllerProcessPlayerInput;
   Game.mGameMode = kGameModeRaceIntro;
   Game.mSequenceTimer = 0;
   Game.mRenderRacerCmd.mAlpha = 0;
@@ -277,9 +278,10 @@ export const gameInit = () => {
     Game.mRacersStandings.push(racer);
     collisionActivateEntity(racer);
   });
+  Game.mPlayerRacer = Game.mRacers[0];
 
-  (Game.mCamera as GameCamera).mTarget = Game.mRacers[0];
-  controllerSetupPlayerInput(Game.mRacers[0].mController);
+  (Game.mCamera as GameCamera).mTarget = Game.mPlayerRacer;
+  controllerSetupPlayerInput(Game.mPlayerRacer.mController);
 
   // gameGoToTrack(0);
   gameGoToMenu();
