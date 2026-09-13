@@ -9,13 +9,13 @@ export type TerrainColorStops = {
 export const kTerrainWidth = 512 as const;
 
 const {
-  mCanvas: terrainCanvas,
-  mCtx: terrainCtx,
+  mCanvas: gTerrainCanvas,
+  mCtx: gTerrainCtx,
 } = ctxCreateOffscreenCanvas(kTerrainWidth, kTerrainWidth, false, true);
 const {
-  mImage: terrainImageData,
-  mPixels: terrainPixels,
-} = ctxGetCanvasImageData(kTerrainWidth, kTerrainWidth, terrainCtx);
+  mImage: gTerrainImageData,
+  mPixels: gTerrainPixels,
+} = ctxGetCanvasImageData(kTerrainWidth, kTerrainWidth, gTerrainCtx);
 
 const terrainSampleGradient = (colorData: TerrainColorStops, height: number) => {
   const h = mathClamp(height, 0, 1);
@@ -43,7 +43,7 @@ const terrainSampleGradient = (colorData: TerrainColorStops, height: number) => 
 
 export const terrainGenerate = (colorData: TerrainColorStops, baseNoiseValue: number) => {
   noiseGenerateCubicNoisePlane(
-    terrainPixels, kTerrainWidth, baseNoiseValue, 8,
+    gTerrainPixels, kTerrainWidth, baseNoiseValue, 8,
     fbm => {
       const height = mathClamp((fbm - 0.24) / 0.64, 0, 1);
       const color = terrainSampleGradient(colorData, height);
@@ -52,6 +52,6 @@ export const terrainGenerate = (colorData: TerrainColorStops, baseNoiseValue: nu
     }
   );
 
-  terrainCtx.putImageData(terrainImageData, 0, 0);
-  return terrainPixels;
+  gTerrainCtx.putImageData(gTerrainImageData, 0, 0);
+  return gTerrainPixels;
 }

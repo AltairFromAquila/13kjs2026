@@ -292,13 +292,13 @@ export const racerFixedTick = (self: Racer, delta: number) => {
     trackFindPointInTrack(Game.mTrack, self.mPos, self.mTrackPoints[-1]?.mSegmentIdx ?? -1, -1, self.mTrackPoints);
   }
 
-  if (prevMainSegmentIdx === 0 && self.mTrackPoints[-1]?.mSegmentIdx === Game.mTrack.segments.length - 1) {
+  if (prevMainSegmentIdx === 0 && self.mTrackPoints[-1]?.mSegmentIdx === Game.mTrack.mSegments.length - 1) {
     self.mLapTracker -= 1;
-  } else if (prevMainSegmentIdx === Game.mTrack.segments.length - 1 && self.mTrackPoints[-1]?.mSegmentIdx === 0) {
+  } else if (prevMainSegmentIdx === Game.mTrack.mSegments.length - 1 && self.mTrackPoints[-1]?.mSegmentIdx === 0) {
     if (self.mLapTracker === self.mLap) {
       if (self.mLap > 0) {
-        const startPos = splineCalculateSegmentPoint(Game.mTrack.segments[0], 0, vec2New());
-        const startTangent = splineCalculateSegmentTangent(Game.mTrack.segments[0], 0, vec2New());
+        const startPos = splineCalculateSegmentPoint(Game.mTrack.mSegments[0], 0, vec2New());
+        const startTangent = splineCalculateSegmentTangent(Game.mTrack.mSegments[0], 0, vec2New());
 
         // Find u in: SP + t*n = PP + u*(CP - PP), where n is the start-line normal.
         const startNormal = vec2New(-startTangent.y, startTangent.x);
@@ -331,7 +331,7 @@ export const racerFixedTick = (self: Racer, delta: number) => {
   let isInsideAnyPath = false;
   let bestDistance = Infinity;
   let bestPathIdx = -1;
-  for (let i = 0; i < Game.mTrack.secondaryPaths.length; ++i) {
+  for (let i = 0; i < Game.mTrack.mSecondaryPaths.length; ++i) {
     const secondaryTrackPoint = self.mTrackPoints[i];
     if (secondaryTrackPoint?.mInside) {
       isInsideAnyPath = true;

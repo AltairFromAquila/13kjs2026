@@ -3,7 +3,7 @@ import { racerData } from "./data/racer.data";
 import { tracks, type TrackMetadata } from "./data/track.data";
 import { cloudsGenerate, kCloudsNoiseWidth } from "./game/clouds";
 import { racerFixedTick, racerNew, racerRender, racerReset, racerSetAngleFromVector, racerSetupTrackPoints, racerTick, type Racer } from "./game/racer";
-import { Track, trackDrawTexture, trackGetStartPositions, trackLoadData } from "./game/track";
+import { kTrackTextureSize, trackDrawTexture, trackGetStartPositions, trackLoadData, trackNew, type Track } from "./game/track";
 import { mathCeil, mathLerp, mathMin, mathRandom, mathTan, vec2Add, vec2Copy, vec2MulScalar, vec2New } from "./math";
 import { cameraGameCamNew, cameraGameCamTick, type GameCamera, cameraGameCamSetupIntro } from "./game/camera";
 import { kVerticalFov, type Camera } from "./core/camera";
@@ -11,7 +11,6 @@ import { uiCalculateResults, uiFadeIn, uiRenderGame, uiRenderMenu, uiReset, uiSe
 import { controllerProcessAIForRacer, controllerProcessPlayerInput, controllerSetupPlayerInput } from "./game/controllers";
 import { collisionActivateEntity } from "./game/collision";
 import { kTerrainWidth } from "./game/terrain";
-import { ctxGetCanvasImageData } from "./sys/context";
 
 const kTargetTickTime = 1/120;
 
@@ -143,7 +142,7 @@ export const Game: Game = {
   mDifficulty: 1,
   mGameMode: kGameModeRaceIntro,
   mSequenceTimer: 0,
-  mTrack: new Track(),
+  mTrack: trackNew(),
   mTrackMetadata: tracks[0].mMetadata,
   mCurrentTrack: 0,
   mRacers: [
@@ -206,18 +205,14 @@ export const gameGoToTrack = (trackIdx: number) => {
   const track = tracks[trackIdx];
 
   trackLoadData(Game.mTrack, track);
-  trackDrawTexture(Game.mTrack);
-
   Game.mTrackMetadata = track.mMetadata;
   Game.mCurrentTrack = trackIdx;
 
-  const trackImageData = ctxGetCanvasImageData(Game.mTrack.textureCanvas.width, Game.mTrack.textureCanvas.height, Game.mTrack.textureCtx);
-
   renderAssignPlanes(
-    trackImageData.mPixels,
+    trackDrawTexture(Game.mTrack),
     gGameCloudsPlane,
     track.mMetadata[2](),
-    Game.mTrack.textureCanvas.width, kCloudsNoiseWidth, kTerrainWidth,
+    kTrackTextureSize, kCloudsNoiseWidth, kTerrainWidth,
     track.mMetadata[5] * 30, track.mMetadata[4] * 30, track.mMetadata[3] * 30
   );
   renderSetColors(track.mMetadata[1], 0xff00cc30);

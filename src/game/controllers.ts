@@ -130,20 +130,20 @@ export const controllerReturnToTrack = (self: Controller, racer: Racer) => {
     nextT -= 1;
 
     if (nextPathIdx > -1) {
-      const branchInPath = Game.mTrack.secondaryPaths[nextPathIdx].branchInPath;
+      const branchInPath = Game.mTrack.mSecondaryPaths[nextPathIdx].branchInPath;
 
       nextPathIdx = branchInPath.path;
       nextSegmentIdx = branchInPath.point;
     } else {
-      nextSegmentIdx = trackWrapSegmentIndex(nextSegmentIdx + 1, Game.mTrack.segments.length);
+      nextSegmentIdx = trackWrapSegmentIndex(nextSegmentIdx + 1, Game.mTrack.mSegments.length);
     }
   }
 
   // We use self.mDesiredDirection as a work vector
   splineCalculateSegmentPoint(
     (nextPathIdx > -1)
-      ? Game.mTrack.secondaryPaths[nextPathIdx].segments[nextSegmentIdx]
-      : Game.mTrack.segments[nextSegmentIdx],
+      ? Game.mTrack.mSecondaryPaths[nextPathIdx].segments[nextSegmentIdx]
+      : Game.mTrack.mSegments[nextSegmentIdx],
     nextT, self.mDesiredDirection
   );
   
@@ -324,10 +324,10 @@ export const controllerProcessAIForRacer = (self: Controller, racer: Racer, delt
         let aheadT = trackPoint.t + kAIGallopLookaheadTOffsets[i];
         while (aheadT > 1) {
           aheadT -= 1;
-          aheadSegmentIdx = trackWrapSegmentIndex(aheadSegmentIdx + 1, Game.mTrack.segments.length);
+          aheadSegmentIdx = trackWrapSegmentIndex(aheadSegmentIdx + 1, Game.mTrack.mSegments.length);
         }
 
-        const tangent = splineCalculateSegmentTangent(Game.mTrack.segments[aheadSegmentIdx], aheadT, vec2New());
+        const tangent = splineCalculateSegmentTangent(Game.mTrack.mSegments[aheadSegmentIdx], aheadT, vec2New());
         const alignment = vec2Dot(tangent0, tangent);
         const safety = mathClamp((alignment + 1) * 0.5, 0, 1);
 
@@ -383,9 +383,9 @@ export const controllerProcessAIForRacer = (self: Controller, racer: Racer, delt
 
   if (self.mWasStuck) {
     const targetSegmentIdx = trackPoint.t > 0.5
-      ? trackWrapSegmentIndex(trackPoint.mSegmentIdx + 1, Game.mTrack.segments.length)
+      ? trackWrapSegmentIndex(trackPoint.mSegmentIdx + 1, Game.mTrack.mSegments.length)
       : trackPoint.mSegmentIdx;
-    const nextPos = splineCalculateSegmentPoint(Game.mTrack.segments[targetSegmentIdx], 0.5, vec2New());
+    const nextPos = splineCalculateSegmentPoint(Game.mTrack.mSegments[targetSegmentIdx], 0.5, vec2New());
 
     vec2Normalize(
       vec2Sub(
@@ -394,7 +394,7 @@ export const controllerProcessAIForRacer = (self: Controller, racer: Racer, delt
       )
     );
   } else if (trackPoint.mSegmentIdx !== self.mPreviousSegmentIdx) {
-    const segment = Game.mTrack.segments[trackPoint.mSegmentIdx];
+    const segment = Game.mTrack.mSegments[trackPoint.mSegmentIdx];
 
     if (segment) {
       const segmentStart = splineCalculateSegmentPoint(segment, 0, vec2New());
@@ -420,16 +420,16 @@ export const controllerProcessAIForRacer = (self: Controller, racer: Racer, delt
 
     if (nextT > 1) {
       // We are exiting the current segment
-      const nextSegment = trackWrapSegmentIndex(trackPoint.mSegmentIdx + 1, Game.mTrack.segments.length);
+      const nextSegment = trackWrapSegmentIndex(trackPoint.mSegmentIdx + 1, Game.mTrack.mSegments.length);
       const nextSegmentLength = vec2Distance(
-        splineCalculateSegmentPoint(Game.mTrack.segments[nextSegment], 0, vec2New()),
-        splineCalculateSegmentPoint(Game.mTrack.segments[nextSegment], 1, vec2New())
+        splineCalculateSegmentPoint(Game.mTrack.mSegments[nextSegment], 0, vec2New()),
+        splineCalculateSegmentPoint(Game.mTrack.mSegments[nextSegment], 1, vec2New())
       ) || kMathEpsilon;
 
       nextT = mathMin(92 / nextSegmentLength, 1); // 92 is the distance we want to look ahead, we divide by the segment length to get the t value
       nextTSegmentIdx = nextSegment;
     }
-    const nextPos = splineCalculateSegmentPoint(Game.mTrack.segments[nextTSegmentIdx], nextT, vec2New());
+    const nextPos = splineCalculateSegmentPoint(Game.mTrack.mSegments[nextTSegmentIdx], nextT, vec2New());
 
     // Calculate current used track width relative to the track center
     const curTrackHalfWidth = trackGetTrackWidthAt(Game.mTrack, -1, trackPoint.mSegmentIdx, trackPoint.t) * 0.5;
@@ -474,7 +474,7 @@ export const controllerProcessAIForRacer = (self: Controller, racer: Racer, delt
         -trackSafeWidthFactor, trackSafeWidthFactor
       );
 
-      const nextTangent = splineCalculateSegmentTangent(Game.mTrack.segments[nextTSegmentIdx], nextT, vec2New());
+      const nextTangent = splineCalculateSegmentTangent(Game.mTrack.mSegments[nextTSegmentIdx], nextT, vec2New());
       const nextNormal = vec2New(-nextTangent.y, nextTangent.x);
 
       const nextTrackHalfWidth = trackGetTrackWidthAt(Game.mTrack, -1, nextTSegmentIdx, nextT) * 0.5;

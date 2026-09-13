@@ -17,13 +17,13 @@ const kWaterWidth = 512 as const;
 const kWaterMask = kWaterWidth - 1;
 
 const {
-  mCanvas: waterCanvas,
-  mCtx: waterCtx,
+  mCanvas: gWaterCanvas,
+  mCtx: gWaterCtx,
 } = ctxCreateOffscreenCanvas(kWaterWidth, kWaterWidth, false, true);
 const {
-  mImage: waterImageData,
-  mPixels: waterPixels,
-} = ctxGetCanvasImageData(kWaterWidth, kWaterWidth, waterCtx);
+  mImage: gWaterImageData,
+  mPixels: gWaterPixels,
+} = ctxGetCanvasImageData(kWaterWidth, kWaterWidth, gWaterCtx);
 
 const kCircleData = (() => {
   const bytesRaw = atob("+zVvNN4mEChTOPYk4TYPO/MlITmQOQkifyMRLasnBTdQNmcnRzsGO0on9jR+OZQibjtGMskjnSnyOuAm8DQ9MiEgmTUyN8EgwSmhO+wliS8HOL8jgjjXM3wniTijOwYhRSpuMpMkjjgAOccixjSwOdwhBjssOpwa1TAFNm0YqS9WOGEiCTm7NBYlWjVDNMokWDu/O68kuTsKOIAeHjjsOmMerzlQKZwatjmeOIUl/jmdNqwh+yssOwwm2DuVN98dLjk8OdUkNjnaO0gf3TYeNqYnfjoBOXAZajbvOfwcTTWyNiAeKDs2LMkfMziUOEMj6DZKO3UlRDlJOxISHjjJM+4mYyYMNH0gBTiQNwEmjDnnNlAmpDYTO/UmxTCYNhcdRTguO6oePSmsOuYkHDkrOUclSDm7O3sdHDiNMNQc9S8nOcgU/TusOH8hKTt3M9Ue4jN2OTcc4Cw6MXkjmDtsOiohrzdKMqQhLTtuOicjsDQbOs0dXy6EL3QgCzbfGnceDThAOGAjijYoOz8mmDDQOkkcxy3RMZMhPzpQNt4cxTQBOaka/TK3OXAWRTkbMaAY5juwMGInIDMHNI8THTE5ODMe");
@@ -92,25 +92,16 @@ export const waterGenerate = (waterColor: WaterColor, botWaterColor: WaterColor,
       const color = waterSample(u, v, 0, waterColor, botWaterColor, foamColor);
       const packed = colorPack(color.r, color.g, color.b, 255);
 
-      waterPixels[(y * kWaterWidth) + x] = packed;
+      gWaterPixels[(y * kWaterWidth) + x] = packed;
     }
   }
 
   // Duplicate edge texels so linear filtering can cross borders without visible seams.
   for (let i = 0; i < kWaterWidth; ++i) {
-    waterPixels[(i * kWaterWidth) + kWaterMask] = waterPixels[i * kWaterWidth];
-    waterPixels[(kWaterMask * kWaterWidth) + i] = waterPixels[i];
+    gWaterPixels[(i * kWaterWidth) + kWaterMask] = gWaterPixels[i * kWaterWidth];
+    gWaterPixels[(kWaterMask * kWaterWidth) + i] = gWaterPixels[i];
   }
 
-  waterCtx.putImageData(waterImageData, 0, 0);
-  return waterPixels;
+  gWaterCtx.putImageData(gWaterImageData, 0, 0);
+  return gWaterPixels;
 };
-
-export const waterGetCanvas = () => {
-  return waterCanvas;
-};
-
-export const waterGetPixels = () => {
-  return waterPixels;
-};
-
