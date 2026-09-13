@@ -1,4 +1,4 @@
-import { colorPack, colorUnpack, kMathEpsilon, kMathHalfPi, kMathPi, kMathTau, mathAbs, mathAtan2, mathClamp, mathCos, mathMax, mathMod, mathSin, mathTan, vec2New, type Vec2 } from "../math";
+import { colorBlend, colorPack, colorUnpack, kMathEpsilon, kMathHalfPi, kMathPi, kMathTau, mathAbs, mathAtan2, mathClamp, mathCos, mathMax, mathMod, mathSin, mathTan, vec2New, type Vec2 } from "../math";
 import type { Camera } from "../core/camera";
 import { canvas, ctxCreateOffscreenCanvas, ctx, ctxGetCanvasImageData } from "../sys/context";
 import type { Entity } from "./entity";
@@ -108,26 +108,9 @@ let {
 } = ctxGetCanvasImageData(canvas.width, canvas.height, projectedPlaneCtx);
 
 const blendAbgr = (src: number, dst: number, t: number): number => {
-  const invT = 1 - t;
-
-  const {
-    r: srcR,
-    g: srcG,
-    b: srcB,
-    a: srcA
-  } = colorUnpack(src);
-  const {
-    r: dstR,
-    g: dstG,
-    b: dstB,
-    a: dstA
-  } = colorUnpack(dst);
-
+  const res = colorBlend(colorUnpack(src), colorUnpack(dst), t);
   return colorPack(
-    (srcR * invT) + (dstR * t),
-    (srcG * invT) + (dstG * t),
-    (srcB * invT) + (dstB * t),
-    (srcA * invT) + (dstA * t)
+    res.r, res.g, res.b, res.a
   );
 }
 

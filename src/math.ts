@@ -5,6 +5,13 @@ export interface Vec2 {
   y: number;
 }
 
+export interface Color {
+  r: number;
+  g: number;
+  b: number;
+  a: number;
+}
+
 export interface SplinePoint extends Vec2 {
   tension: number;
   width: number;
@@ -183,7 +190,7 @@ export const noiseGenerateCubicNoisePlane = (
 
 //#endregion
 
-export const colorUnpack = (color: number) => ({
+export const colorUnpack = (color: number): Color => ({
   r: color & 255,
   g: (color >> 8) & 255,
   b: (color >> 16) & 255,
@@ -191,6 +198,16 @@ export const colorUnpack = (color: number) => ({
 });
 
 export const colorPack = (r: number, g: number, b: number, a: number) => ((a|0) << 24) | ((b|0) << 16) | ((g|0) << 8) | (r|0);
+
+export const colorBlend = (a: Color, b: Color, t: number) => {
+  const invT = 1 - t;
+  return {
+    r: ((a.r * invT) + (b.r * t)) | 0,
+    g: ((a.g * invT) + (b.g * t)) | 0,
+    b: ((a.b * invT) + (b.b * t)) | 0,
+    a: ((a.a * invT) + (b.a * t)) | 0
+  };
+}
 
 export const vec2New = (x = 0, y = 0): Vec2 => ({ x, y });
 

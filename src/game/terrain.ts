@@ -1,9 +1,9 @@
-import { colorPack, mathClamp, noiseGenerateCubicNoisePlane } from "../math";
+import { colorPack, mathClamp, noiseGenerateCubicNoisePlane, type Color } from "../math";
 import { ctxCreateOffscreenCanvas, ctxGetCanvasImageData } from "../sys/context";
 
 export type TerrainColorStops = {
   mHeight: number,
-  mColor: { r: number; g: number; b: number; };
+  mColor: Color;
 }[];
 
 export const kTerrainWidth = 512 as const;
