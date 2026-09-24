@@ -1,17 +1,15 @@
 import "./sys/context";
 
-import { Game } from "./game";
+import { Game, gameInit } from "./game";
 
-if (typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope) {
-  // Worker thread
-} else {
-  // Main thread
+let currentTime = performance.now();
 
-  const game = new Game();
-  let currentTime = performance.now();
+gameInit();
+function run(time: number) {
+  requestAnimationFrame(run);
 
-  function run(time: number) {
-    requestAnimationFrame(run);
+  const delta = time - currentTime;
+  Game.mProcess(Game, delta * 0.001);
 
     const delta = time - currentTime;
     game.process(game, delta * 0.001);

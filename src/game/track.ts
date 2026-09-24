@@ -1,5 +1,6 @@
 import type { TrackRawData } from "../data/track.data";
-import { splineCalculateCatmullRom, splineCalculateSegmentPoint, splineCalculateSegmentTangent, mathLerp, mathJs, vec2Add, vec2Dot, vec2MulScalar, vec2New, vec2NewCopy, vec2Normalize, vec2Sub, type SplinePoint, type SplineSegment, type Vec2 } from "../math";
+import { splineCalculateCatmullRom, splineCalculateSegmentPoint, splineCalculateSegmentTangent, mathLerp, vec2Add, vec2Dot, vec2MulScalar, vec2New, vec2NewCopy, vec2Normalize, vec2Sub, type SplinePoint, type SplineSegment, type Vec2, mathMod, vec2Copy, vec2LengthSqr, mathAbs, mathMax, mathSqrt } from "../math";
+import { ctxBeginPath, ctxClosePathAndFill, ctxCreateOffscreenCanvas, ctxGetCanvasImageData, ctxGetRainbowGradient, ctxLineTo, ctxMoveTo, ctxSetFillStyle } from "../sys/context";
 
 interface TrackData {
   mainPath: SplinePoint[];
@@ -17,79 +18,66 @@ interface SecondaryPathData {
 interface SecondaryPath {
   segments: SplineSegment[];
   depthChanges: { [point: number]: number; };
+  branchOffPath: { path: number; point: number; };
+  branchInPath: { path: number; point: number; };
 }
 
 export interface TrackPointProjection {
-  pathIdx: number;
-  segmentIdx: number;
+  mPathIdx: number;
+  mSegmentIdx: number;
   t: number;
-  pos: Vec2;
-  tangent: Vec2;
-  width: number;
-  inside: boolean;
+  mPos: Vec2;
+  mTangent: Vec2;
+  mWidth: number;
+  mDistSqr: number;
+  mInside: boolean;
 }
 
-export interface TrackFindPointResult {
-  projection: TrackPointProjection;
-  mainPathProjection: TrackPointProjection | null;
+export interface Track {
+  mSegments: SplineSegment[];
+  mSecondaryPaths: SecondaryPath[];
 }
 
-export class Track {
-  segments: SplineSegment[] = [];
-  secondaryPaths: SecondaryPath[] = [];
+export const kTrackTextureSize = 4096;
 
-  textureCanvas: OffscreenCanvas = new OffscreenCanvas(2048 * 2, 2048 * 2);
-  textureCtx: OffscreenRenderingContext = this.textureCanvas.getContext('2d', { willReadFrequently: true })!;
-}
+const {
+  mCtx: gTrackCtx,
+} = ctxCreateOffscreenCanvas(kTrackTextureSize, kTrackTextureSize, true, true);
 
 const kStartPosDistanceFromStartLine = 12 as const;
 const kStartPosDistance = 24 as const;
 
-export function trackLoadData(self: Track, data: TrackRawData) {
-  const mainPath: SplinePoint[] = [];
-  for (let i = 0; i < data.mainPath.length; i += 3) {
-    mainPath.push({
-      x: data.mainPath[i],
-      y: data.mainPath[i + 1],
-      tension: 0,
-      width: data.mainPath[i + 2],
-    });
-  }
-  
-  const secondaryPaths: SecondaryPathData[] = [];
-  for (const pathData of data.secondaryPaths ?? []) {
-    const path: SplinePoint[] = [];
-    for (let i = 4; i < pathData.data.length; i += 3) {
-      path.push({
-        x: pathData.data[i],
-        y: pathData.data[i + 1],
-        tension: 0,
-        width: pathData.data[i + 2],
-      });
-    }
-    secondaryPaths.push({
-      branchInPath: {
-        path: pathData.data[0],
-        point: pathData.data[1],
-      },
-      branchOffPath: {
-        path: pathData.data[2],
-        point: pathData.data[3],
-      },
-      path: path,
-      depthChanges: pathData.depthChanges,
-    });
-  }
+const workTrackPoints: { [k: number]: TrackPointProjection } = {};
 
-  trackCalculateSpline(self, {
-    mainPath: mainPath,
-    secondaryPaths: secondaryPaths,
-    alpha: 0.8,
+const trackSampleTrackSegment = (
+  segment: SplineSegment,
+  t0: number, t1: number,
+  tan0: Vec2, tan1: Vec2,
+  depth: number,
+  samples: ({ pos: Vec2, normal: Vec2, width: number } | null)[],
+) => {
+  if (depth > 8) return;
+
+  const tMid = 0.5 * (t0 + t1);
+  const tanMid = vec2Normalize(splineCalculateSegmentTangent(segment, tMid, vec2New()));
+
+  trackSampleTrackSegment(segment, t0, tMid, tan0, tanMid, depth + 1, samples);
+  samples.push({
+    pos: vec2NewCopy(splineCalculateSegmentPoint(segment, tMid, vec2New())),
+    normal: vec2New(-tanMid.y, tanMid.x),
+    width: mathLerp(segment.w0, segment.w1, tMid),
   });
+  trackSampleTrackSegment(segment, tMid, t1, tanMid, tan1, depth + 1, samples);
 }
 
-export function trackCalculateSpline(self: Track, trackData: TrackData) {
-  const segments = self.segments;
+const trackGetDistanceSqrAt = (segment: SplineSegment, t: number, pos: Vec2) => {
+  const point = splineCalculateSegmentPoint(segment, t, vec2New());
+  const diff = vec2Sub(vec2NewCopy(pos), point);
+  return vec2LengthSqr(diff);
+}
+
+const trackCalculateSpline = (self: Track, trackData: TrackData)  => {
+  const segments = self.mSegments;
   segments.length = 0;
   
   const mainPath = trackData.mainPath;
@@ -99,7 +87,7 @@ export function trackCalculateSpline(self: Track, trackData: TrackData) {
     segments
   );
 
-  const secondaryPaths = self.secondaryPaths;
+  const secondaryPaths = self.mSecondaryPaths;
   const secondaryPathsData = trackData.secondaryPaths;
 
   secondaryPaths.length = 0;
@@ -128,18 +116,81 @@ export function trackCalculateSpline(self: Track, trackData: TrackData) {
 
     secondaryPaths.push({
       segments,
-      depthChanges: path.depthChanges
+      depthChanges: path.depthChanges,
+      branchOffPath: path.branchOffPath,
+      branchInPath: path.branchInPath
     });
   }
 }
 
-export function trackDrawTexture(self: Track) {
+export const trackNew = (): Track => ({
+  mSegments: [],
+  mSecondaryPaths: [],
+});
+
+export const trackWrapSegmentIndex = (segmentIdx: number, segmentCount: number) => (segmentCount <= 0) ? 0 : mathMod(segmentIdx, segmentCount);
+
+export const trackGetTrackWidthAt = (self: Track, pathIdx: number, segmentIdx: number, t: number) => {
+  const segments = (pathIdx === -1)
+    ? self.mSegments
+    : self.mSecondaryPaths[pathIdx]?.segments;
+  const segmentLen = segments?.length ?? 0;
+  
+  if (segmentLen === 0) return 0;
+  const segment = segments[trackWrapSegmentIndex(segmentIdx, segments.length)];
+  return mathLerp(segment.w0, segment.w1, t);
+};
+
+export const trackLoadData = (self: Track, data: TrackRawData) => {
+  const mainPath: SplinePoint[] = [];
+  for (let i = 0; i < data.mMainPath.length; i += 3) {
+    mainPath.push({
+      x: data.mMainPath[i] * 10,
+      y: data.mMainPath[i + 1] * 10,
+      tension: 0,
+      width: data.mMainPath[i + 2] * 10,
+    });
+  }
+  
+  const secondaryPaths: SecondaryPathData[] = [];
+  for (const pathData of data.mSecondaryPaths ?? []) {
+    const path: SplinePoint[] = [];
+    for (let i = 4; i < pathData.mData.length; i += 3) {
+      path.push({
+        x: pathData.mData[i] * 10,
+        y: pathData.mData[i + 1] * 10,
+        tension: 0,
+        width: pathData.mData[i + 2] * 10,
+      });
+    }
+    secondaryPaths.push({
+      branchInPath: {
+        path: pathData.mData[0],
+        point: pathData.mData[1],
+      },
+      branchOffPath: {
+        path: pathData.mData[2],
+        point: pathData.mData[3],
+      },
+      path: path,
+      depthChanges: pathData.mDepthChanges,
+    });
+  }
+
+  trackCalculateSpline(self, {
+    mainPath: mainPath,
+    secondaryPaths: secondaryPaths,
+    alpha: 0.8,
+  });
+}
+
+export const trackDrawTexture = (self: Track) => {
   let segments: SplineSegment[];
 
-  if (self.secondaryPaths.length > 0) {
+  if (self.mSecondaryPaths.length > 0) {
     const segmentMap: { [depth: number]: SplineSegment[] } = {};
 
-    for (const path of self.secondaryPaths) {
+    for (const path of self.mSecondaryPaths) {
       let depth = 0;
 
       for (let segmentIdx = 0; segmentIdx < path.segments.length; ++segmentIdx) {
@@ -147,7 +198,7 @@ export function trackDrawTexture(self: Track) {
         (segmentMap[depth] ??= []).push(path.segments[segmentIdx]);
       }
     }
-    (segmentMap[0] ??= []).push(...self.segments);
+    (segmentMap[0] ??= []).push(...self.mSegments);
 
     const depths = Object.keys(segmentMap).sort((a, b) => +a - +b);
     segments = [];
@@ -155,7 +206,7 @@ export function trackDrawTexture(self: Track) {
       segments.push(...segmentMap[+d]);
     }
   } else {
-    segments = self.segments;
+    segments = self.mSegments;
   }
 
   const samples: ({ pos: Vec2, normal: Vec2, width: number } | null)[] = [];
@@ -170,7 +221,7 @@ export function trackDrawTexture(self: Track) {
       normal: vec2New(-tan0.y, tan0.x),
       width: cur.w0
     });
-    sampleTrackSegment(cur, 0, 1, tan0, tan1, 0, samples);
+    trackSampleTrackSegment(cur, 0, 1, tan0, tan1, 0, samples);
     samples.push({
       pos: vec2NewCopy(splineCalculateSegmentPoint(cur, 1, vec2New())),
       normal: vec2New(-tan1.y, tan1.x),
@@ -180,10 +231,8 @@ export function trackDrawTexture(self: Track) {
     samples.push(null);
   }
 
-  const ctx = self.textureCtx as OffscreenCanvasRenderingContext2D;
-  const { width: canvasWidth, height: canvasHeight } = self.textureCanvas;
-  ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-  // ctx.imageSmoothingEnabled = false;
+  const ctx = gTrackCtx;
+  ctx.clearRect(0, 0, kTrackTextureSize, kTrackTextureSize);
 
   const samplesLen = samples.length;
   for (let i = 0; i < samplesLen; ++i) {
@@ -222,29 +271,21 @@ export function trackDrawTexture(self: Track) {
     const gradLeft = vec2Add(vec2MulScalar(vec2NewCopy(midNormal), midHalfWidth), midPos);
     const gradRight = vec2Add(vec2MulScalar(vec2NewCopy(midNormal), -midHalfWidth), midPos);
 
-    const gradient = ctx.createLinearGradient(gradLeft.x, gradLeft.y, gradRight.x, gradRight.y);
-    gradient.addColorStop(0.00, "#f008");
-    gradient.addColorStop(0.17, "#f808");
-    gradient.addColorStop(0.33, "#ff08");
-    gradient.addColorStop(0.50, "#0f08");
-    gradient.addColorStop(0.67, "#00f8");
-    gradient.addColorStop(0.83, "#4088");
-    gradient.addColorStop(1.00, "#80f8");
+    const gradient = ctxGetRainbowGradient(gradLeft.x, gradLeft.y, gradRight.x, gradRight.y, '8', ctx);
 
-    ctx.fillStyle = gradient;
+    ctxSetFillStyle(gradient, ctx);
     ctx.strokeStyle = gradient;
-    ctx.beginPath();
-    ctx.moveTo(curLeft.x, curLeft.y);
-    ctx.lineTo(nextLeft.x, nextLeft.y);
-    ctx.lineTo(nextRight.x, nextRight.y);
-    ctx.lineTo(curRight.x, curRight.y);
-    ctx.closePath();
-    ctx.fill();
+    ctxBeginPath(ctx);
+    ctxMoveTo(curLeft.x, curLeft.y, ctx);
+    ctxLineTo(nextLeft.x, nextLeft.y, ctx);
+    ctxLineTo(nextRight.x, nextRight.y, ctx);
+    ctxLineTo(curRight.x, curRight.y, ctx);
+    ctxClosePathAndFill(ctx);
     ctx.stroke();
   }
 
-  const start = self.segments[0];
-  if (!start) return;
+  const start = self.mSegments[0];
+  if (!start) return ctxGetCanvasImageData(kTrackTextureSize, kTrackTextureSize, gTrackCtx).mPixels;
 
   const startPos = start.d;
   const startTan = vec2Normalize(vec2NewCopy(start.c));
@@ -281,24 +322,25 @@ export function trackDrawTexture(self: Track) {
         vec2MulScalar(vec2NewCopy(startTan), t1)
       );
 
-      ctx.fillStyle = ((x + y) & 1) ? "#000" : "#fff";
-      ctx.beginPath();
-      ctx.moveTo(p0.x, p0.y);
-      ctx.lineTo(p1.x, p1.y);
-      ctx.lineTo(p2.x, p2.y);
-      ctx.lineTo(p3.x, p3.y);
-      ctx.closePath();
-      ctx.fill();
+      ctx.fillStyle = ((x + y) & 1) ? '#000' : '#fff';
+      ctxBeginPath(ctx);
+      ctxMoveTo(p0.x, p0.y, ctx);
+      ctxLineTo(p1.x, p1.y, ctx);
+      ctxLineTo(p2.x, p2.y, ctx);
+      ctxLineTo(p3.x, p3.y, ctx);
+      ctxClosePathAndFill(ctx);
     }
   }
+
+  return ctxGetCanvasImageData(kTrackTextureSize, kTrackTextureSize, gTrackCtx).mPixels;
 }
 
-export function trackGetStartPositions(self: Track): { pos: Vec2, tangent: Vec2, normal: Vec2 }[] {
-  const positions: { pos: Vec2, tangent: Vec2, normal: Vec2 }[] = [];
-  const start = self.segments[0];
+export const trackGetStartPositions = (self: Track, rows: number): TrackPointProjection[] => {
+  const positions: TrackPointProjection[] = [];
+  const start = self.mSegments[0];
   if (!start) return positions;
 
-  const segments = self.segments;
+  const segments = self.mSegments;
   const segmentCount = segments.length;
   if (segmentCount === 0) return positions;
 
@@ -319,7 +361,7 @@ export function trackGetStartPositions(self: Track): { pos: Vec2, tangent: Vec2,
       
       const dx = cur.x - prev.x;
       const dy = cur.y - prev.y;
-      length += mathJs.sqrt(dx * dx + dy * dy);
+      length += mathSqrt(dx * dx + dy * dy);
 
       if (length >= targetDistance) return targetDistance;
 
@@ -330,7 +372,7 @@ export function trackGetStartPositions(self: Track): { pos: Vec2, tangent: Vec2,
 
   const moveBackward = (fromSegmentIdx: number, fromT: number, distance: number) => {
     const eps = 1e-4;
-    let segmentIdx = wrapSegmentIndex(fromSegmentIdx, segmentCount);
+    let segmentIdx = trackWrapSegmentIndex(fromSegmentIdx, segmentCount);
     let t = fromT;
     let remaining = distance;
     let guard = 0;
@@ -339,7 +381,7 @@ export function trackGetStartPositions(self: Track): { pos: Vec2, tangent: Vec2,
       ++guard;
 
       if (t <= eps) {
-        segmentIdx = wrapSegmentIndex(segmentIdx - 1, segmentCount);
+        segmentIdx = trackWrapSegmentIndex(segmentIdx - 1, segmentCount);
         t = 1;
       }
 
@@ -348,7 +390,7 @@ export function trackGetStartPositions(self: Track): { pos: Vec2, tangent: Vec2,
 
       if (available + eps >= remaining) {
         const tCurrent = t;
-        const targetFromEnd = mathJs.max(0, remaining);
+        const targetFromEnd = mathMax(0, remaining);
         let left = 0;
         let right = tCurrent;
 
@@ -368,27 +410,33 @@ export function trackGetStartPositions(self: Track): { pos: Vec2, tangent: Vec2,
       }
 
       remaining -= available;
-      segmentIdx = wrapSegmentIndex(segmentIdx - 1, segmentCount);
+      segmentIdx = trackWrapSegmentIndex(segmentIdx - 1, segmentCount);
       t = 1;
     }
 
     const segment = segments[segmentIdx];
     const pos = splineCalculateSegmentPoint(segment, t, vec2New());
     const tangent = vec2Normalize(splineCalculateSegmentTangent(segment, t, vec2New()));
-    const normal = vec2New(-tangent.y, tangent.x);
+    const width = trackGetTrackWidthAt(self, -1, segmentIdx, t);
 
-    return { segmentIdx, t, pos, tangent, normal };
+    return { segmentIdx, t, pos, tangent, width };
   };
 
   let segmentIdx = 0;
   let t = 0;
-  for (let i = 0; i < 2; ++i) {
+  for (let i = 0; i < rows; ++i) {
     const sample = moveBackward(segmentIdx, t, kStartPosDistance + kStartPosDistanceFromStartLine);
     positions.push({
-      pos: sample.pos,
-      tangent: sample.tangent,
-      normal: sample.normal,
+      mPathIdx: -1,
+      mSegmentIdx: sample.segmentIdx,
+      t: sample.t,
+      mPos: sample.pos,
+      mTangent: sample.tangent,
+      mWidth: sample.width,
+      mInside: true,
+      mDistSqr: vec2LengthSqr(sample.pos),
     });
+
     segmentIdx = sample.segmentIdx;
     t = sample.t;
   }
@@ -396,167 +444,123 @@ export function trackGetStartPositions(self: Track): { pos: Vec2, tangent: Vec2,
   return positions;
 }
 
-export function trackFindPoint(self: Track, pos: Vec2, pathIdx: number, segmentIdx: number, forceMainPath = false, fast = false): TrackFindPointResult | null {
-  const pathCount = self.secondaryPaths.length;
-  const validPathIdx = (pathIdx >= 0 && pathIdx < pathCount) ? pathIdx : -1;
+export const trackCopyTrackPoint = (trackPointTo: TrackPointProjection, trackPointFrom: TrackPointProjection) => {
+  trackPointTo.mPathIdx = trackPointFrom.mPathIdx;
+  trackPointTo.mSegmentIdx = trackPointFrom.mSegmentIdx;
+  trackPointTo.t = trackPointFrom.t;
+  vec2Copy(trackPointTo.mPos, trackPointFrom.mPos);
+  vec2Copy(trackPointTo.mTangent, trackPointFrom.mTangent);
+  trackPointTo.mWidth = trackPointFrom.mWidth;
+  trackPointTo.mInside = trackPointFrom.mInside;
+  trackPointTo.mDistSqr = trackPointFrom.mDistSqr;
+};
 
-  const mainProjection = findClosestOnPath(self, -1, pos, (validPathIdx === -1) ? segmentIdx : 0, fast);
-  if (!mainProjection) return null;
+/**
+ * **inMode**: -1 = main path only, 0 = all paths, 1 = secondary paths only
+ */
+export const trackFindPointInTrack = (
+  self: Track, pos: Vec2, mainPathHintSegment: number,
+  mode: -1 | 0 | 1, trackPoints: { [pathIdx: number]: TrackPointProjection }
+) => {
+  let workSegmentKey = 0;
+  const projectPointToSegment = (segments: SplineSegment[], segmentIdx: number) => {
+    const segment = segments[segmentIdx];
+    const kSamples = 12;
+    let bestT = 0;
+    let bestDistSq = Infinity;
 
-  if (forceMainPath) {
-    return {
-      projection: mainProjection,
-      mainPathProjection: mainProjection,
-    };
-  }
-
-  let bestProjection = mainProjection;
-
-  const preferredPath = validPathIdx === -1
-    ? mainProjection
-    : findClosestOnPath(self, validPathIdx, pos, segmentIdx, fast);
-
-  if (preferredPath && preferredPath.distSq < bestProjection.distSq) {
-    bestProjection = preferredPath;
-  }
-
-  for (let secondaryIdx = 0; secondaryIdx < pathCount; ++secondaryIdx) {
-    if (secondaryIdx === validPathIdx) continue;
-
-    const projection = findClosestOnPath(self, secondaryIdx, pos, segmentIdx, fast);
-    if (projection && projection.distSq < bestProjection.distSq) {
-      bestProjection = projection;
-    }
-  }
-
-  return {
-    projection: bestProjection,
-    mainPathProjection: (bestProjection.pathIdx === -1) ? null : mainProjection,
-  };
-}
-
-function sampleTrackSegment(
-  segment: SplineSegment,
-  t0: number, t1: number,
-  tan0: Vec2, tan1: Vec2,
-  depth: number,
-  samples: ({ pos: Vec2, normal: Vec2, width: number } | null)[],
-) {
-  if (depth > 8) return;
-
-  const tMid = 0.5 * (t0 + t1);
-  const tanMid = vec2Normalize(splineCalculateSegmentTangent(segment, tMid, vec2New()));
-
-  sampleTrackSegment(segment, t0, tMid, tan0, tanMid, depth + 1, samples);
-  samples.push({
-    pos: vec2NewCopy(splineCalculateSegmentPoint(segment, tMid, vec2New())),
-    normal: vec2New(-tanMid.y, tanMid.x),
-    width: mathLerp(segment.w0, segment.w1, tMid),
-  });
-  sampleTrackSegment(segment, tMid, t1, tanMid, tan1, depth + 1, samples);
-}
-
-function wrapSegmentIndex(segmentIdx: number, segmentCount: number) {
-  if (segmentCount <= 0) return 0;
-  return ((segmentIdx % segmentCount) + segmentCount) % segmentCount;
-}
-
-function getDistanceSqrAt(segment: SplineSegment, t: number, pos: Vec2) {
-  const point = splineCalculateSegmentPoint(segment, t, vec2New());
-  const diff = vec2Sub(vec2NewCopy(pos), point);
-  return vec2Dot(diff, diff);
-}
-
-function projectPointToSegment(pathIdx: number, segmentIdx: number, segment: SplineSegment, pos: Vec2): (TrackPointProjection & { distSq: number }) {
-  const samples = 8;
-  let bestT = 0;
-  let bestDistSq = Infinity;
-
-  for (let i = 0; i <= samples; ++i) {
-    const t = i / samples;
-    const distSq = getDistanceSqrAt(segment, t, pos);
-    if (distSq < bestDistSq) {
-      bestDistSq = distSq;
-      bestT = t;
-    }
-  }
-
-  const coarseStep = 1 / samples;
-  let left = (bestT > coarseStep) ? bestT - coarseStep : 0;
-  let right = (bestT < 1 - coarseStep) ? bestT + coarseStep : 1;
-
-  for (let i = 0; i < 14; ++i) {
-    const t1 = (2 * left + right) / 3;
-    const t2 = (left + 2 * right) / 3;
-
-    const dist1 = getDistanceSqrAt(segment, t1, pos);
-    const dist2 = getDistanceSqrAt(segment, t2, pos);
-
-    if (dist1 <= dist2) {
-      right = t2;
-    } else {
-      left = t1;
-    }
-  }
-
-  const t = 0.5 * (left + right);
-  const point = splineCalculateSegmentPoint(segment, t, vec2New());
-  const tangent = vec2Normalize(splineCalculateSegmentTangent(segment, t, vec2New()));
-  const normal = vec2New(-tangent.y, tangent.x);
-  const toPos = vec2Sub(vec2NewCopy(pos), point);
-  const signedOffset = vec2Dot(toPos, normal);
-  const width = mathLerp(segment.w0, segment.w1, t);
-  const distSq = vec2Dot(toPos, toPos);
-
-  return {
-    pathIdx,
-    segmentIdx,
-    t,
-    pos: point,
-    tangent,
-    width,
-    inside: Math.abs(signedOffset) <= 0.5 * width,
-    distSq,
-  };
-}
-
-function findClosestOnPath(self: Track, pathIdx: number, pos: Vec2, hintSegmentIdx: number, fast = false): (TrackPointProjection & { distSq: number }) | null {
-  const segments = (pathIdx === -1)
-    ? self.segments
-    : self.secondaryPaths[pathIdx]?.segments;
-
-  if (!segments || segments.length === 0) return null;
-
-  const segmentCount = segments.length;
-  const uniqueCandidates = new Set<number>();
-  const candidateIndices: number[] = [];
-
-  // Start with a local neighborhood around the hint for better temporal stability.
-  const hinted = [hintSegmentIdx - 2, hintSegmentIdx - 1, hintSegmentIdx, hintSegmentIdx + 1, hintSegmentIdx + 2];
-  for (const idx of hinted) {
-    const wrapped = wrapSegmentIndex(idx, segmentCount);
-    if (!uniqueCandidates.has(wrapped)) {
-      uniqueCandidates.add(wrapped);
-      candidateIndices.push(wrapped);
-    }
-  }
-
-  if (!fast) {
-    for (let i = 0; i < segmentCount; ++i) {
-      if (!uniqueCandidates.has(i)) {
-        uniqueCandidates.add(i);
-        candidateIndices.push(i);
+    for (let i = 0; i <= kSamples; ++i) {
+      const t = i / kSamples;
+      const distSq = trackGetDistanceSqrAt(segment, t, pos);
+      if (distSq < bestDistSq) {
+        bestDistSq = distSq;
+        bestT = t;
       }
     }
+
+    const coarseStep = 1 / kSamples;
+    let left = (bestT > coarseStep) ? bestT - coarseStep : 0;
+    let right = (bestT < 1 - coarseStep) ? bestT + coarseStep : 1;
+
+    for (let i = 0; i < 32; ++i) {
+      const t1 = (2 * left + right) / 3;
+      const t2 = (left + 2 * right) / 3;
+
+      const dist1 = trackGetDistanceSqrAt(segment, t1, pos);
+      const dist2 = trackGetDistanceSqrAt(segment, t2, pos);
+
+      if (dist1 <= dist2) {
+        right = t2;
+      } else {
+        left = t1;
+      }
+    }
+
+    const t = 0.5 * (left + right);
+    const trackPoint = workTrackPoints[workSegmentKey] || (workTrackPoints[workSegmentKey] = { mPos: vec2New(), mTangent: vec2New() } as TrackPointProjection);
+
+    trackPoint.mPathIdx = -1;
+    trackPoint.mSegmentIdx = segmentIdx;
+    trackPoint.t = t;
+    splineCalculateSegmentPoint(segment, t, trackPoint.mPos);
+    vec2Normalize(splineCalculateSegmentTangent(segment, t, trackPoint.mTangent));
+    trackPoint.mWidth = mathLerp(segment.w0, segment.w1, t);
+
+    const tangent = trackPoint.mTangent;
+    const normal = vec2New(-tangent.y, tangent.x);
+    const toPos = vec2Sub(vec2NewCopy(pos), trackPoint.mPos);
+    const signedOffset = vec2Dot(toPos, normal);
+
+    trackPoint.mInside = mathAbs(signedOffset) <= (0.5 * trackPoint.mWidth) + 3;
+    trackPoint.mDistSqr = vec2Dot(toPos, toPos);
+    
+    return trackPoint;
+  };
+  const calcuateBestProjection = (segments: SplineSegment[], minSegmentIdx: number, maxSegmentIdx: number) => {
+    let bestDistSq = Infinity;
+    let bestProjection = null;
+
+    for (let i = minSegmentIdx; i <= maxSegmentIdx; ++i) {
+      const res = projectPointToSegment(segments, trackWrapSegmentIndex(i, segments.length));
+      if (res.mDistSqr < bestDistSq) {
+        bestDistSq = res.mDistSqr;
+        bestProjection = res;
+        workSegmentKey ^= 1;
+      }
+    }
+
+    return bestProjection as TrackPointProjection;
+  }
+  const findClosestOnPath = (segments: SplineSegment[], hintSegment: number, trackPointIdx: number) => {
+    const segmentLen = segments.length;
+    let bestProjection = null as TrackPointProjection | null;
+
+    if (segmentLen > 5 && hintSegment >= 0 && hintSegment < segmentLen) {
+      // Try the hinted segment only -- fast mode
+      const minSegmentIdx = hintSegment - 2;
+      const maxSegmentIdx = hintSegment + 2;
+      
+      bestProjection = calcuateBestProjection(segments, minSegmentIdx, maxSegmentIdx);
+    } else {
+      // Check all segments
+      bestProjection = calcuateBestProjection(segments, 0, segments.length - 1);
+    }
+
+    trackCopyTrackPoint(
+      trackPoints[trackPointIdx] || (trackPoints[trackPointIdx] = { mPos: vec2New(), mTangent: vec2New() } as TrackPointProjection),
+      bestProjection
+    );
+    trackPoints[trackPointIdx].mPathIdx = trackPointIdx;
+  };
+
+  if (mode !== 1) {
+    findClosestOnPath(self.mSegments, mainPathHintSegment, -1);
   }
 
-  let best: (TrackPointProjection & { distSq: number }) | null = null;
-  for (const idx of candidateIndices) {
-    const candidate = projectPointToSegment(pathIdx, idx, segments[idx], pos);
-    if (!best || candidate.distSq < best.distSq) {
-      best = candidate;
+  if (mode !== -1) {
+    const pathCount = self.mSecondaryPaths.length;
+    for (let pathIdx = 0; pathIdx < pathCount; ++pathIdx) {
+      findClosestOnPath(self.mSecondaryPaths[pathIdx].segments, -1, pathIdx);
     }
   }
-
-  return best;
-}
+};

@@ -1,49 +1,48 @@
-export type TrackRawData = {
-  mainPath: number[];
-  secondaryPaths?: { depthChanges: { [key: number]: number }; data: number[] }[];
+import { kCloudsNoiseWidth } from "../game/clouds";
+import { terrainGenerate } from "../game/terrain";
+import { colorUnpack, kMathTau, mathSin, type Vec2 } from "../math";
+
+export interface TrackRawData {
+  mMainPath: number[];
+  mSecondaryPaths?: { mDepthChanges: { [key: number]: number }; mData: number[] }[];
+  mMetadata: TrackMetadata;
+}
+
+// Name, SkyColor, TerrainData, TerrainHeight, CloudsHeight, SkyCloudsHeight, FogDistance, MovePlanesFunction
+export type TrackMetadata = [string, number, () => Uint32Array, number, number, number, number, (cloudsOffset: Vec2, terrainOffset: Vec2, delta: number) => void];
+
+const moveClouds = (cloudsOffset: Vec2, delta: number) => {
+  cloudsOffset.x = (cloudsOffset.x + (delta * 4)) % kCloudsNoiseWidth;
+  cloudsOffset.y = (cloudsOffset.y + (delta * 4)) % kCloudsNoiseWidth;
+};
+
+let waterOffsetValue = 0;
+const moveWater = (waterOffset: Vec2, delta: number) => {
+  waterOffsetValue = (waterOffsetValue + delta) % kMathTau;
+  waterOffset.x = mathSin(waterOffsetValue) * 5;
 }
 
 export const tracks: TrackRawData[] = [
   {
-    mainPath: [
-      1014, 1006, 80,
-      1020, 2000, 80,
-      1496, 2414, 80,
-      2030, 2005, 80,
-      2010, 990, 80,
-      1510, 584, 80,
+    mMainPath: [
+      101, 100, 8,
+      102, 200, 8,
+      149, 241, 8,
+      203, 200, 8,
+      201, 99, 8,
+      151, 58, 8,
     ],
-    // [
-    //   // 48, 990, 60,
-    //   // 65, 1204, 60,
-    //   // 315, 1590, 60,
-    //   // 615, 1690, 60,
-    //   // 715, 1698, 60,
-    //   // 815, 1690, 60,
-    //   // 1115, 1590, 60,
-    //   // 1375, 1204, 60,
-    //   // 1390, 990, 60,
-    //   // 1390, 590, 60,
-    //   // 1375, 490, 60,
-    //   // 1115, 190, 60,
-    //   // 815, 90, 60,
-    //   // 715, 80, 60,
-    //   // 615, 90, 60,
-    //   // 315, 190, 60,
-    //   // 65, 490, 60,
-    //   // 50, 590, 60,
-    // ],
-    secondaryPaths: [
+    mSecondaryPaths: [
       {
-        depthChanges: {
+        mDepthChanges: {
           2: 1
         },
-        data: [
+        mData: [
           -1, 0,
           -1, 5,
-          1130, 570, 80,
-          1044, 623, 60,
-          1020, 801, 80
+          113, 57, 8,
+          104, 62, 6,
+          102, 80, 8
         ]
       }
       // [
@@ -54,101 +53,226 @@ export const tracks: TrackRawData[] = [
       //   100, 120, 60,
       // ]
     ],
-  },
-  {
-    mainPath: [
-      2220, 440, 80,
-      1373, 565, 80,
-      1000, 1120, 80,
-      1227, 2063, 70,
-      1810, 2100, 70,
-      2156, 1290, 60,
-      2564, 1690, 60,
-      2910, 1595, 60,
-      3080, 1033, 70,
-      3550, 870, 70,
-      3580, 620, 80,
-      3246, 510, 80
+    mMetadata: [
+      'Mystic Forest',
+      0xffbb55,
+      () => terrainGenerate(
+        [
+          { mHeight: 0, mColor: colorUnpack(0xff913c14) },
+          { mHeight: 1, mColor: colorUnpack(0xfff5c378) },
+          { mHeight: 2, mColor: colorUnpack(0xff90af68) },
+          { mHeight: 5, mColor: colorUnpack(0xff306022) },
+          { mHeight: 8, mColor: colorUnpack(0xff4e803f) },
+          { mHeight: 10, mColor: colorUnpack(0xff7ea771) }
+        ], 16
+      ),
+      7, 2, 5, 2,
+      (cloudsOffset: Vec2, _: Vec2, delta: number) => moveClouds(cloudsOffset, delta)
     ]
   },
   {
-    mainPath: [
-      1690, 1626, 80,
-      1910, 1264, 80,
-      1854, 640, 70,
-      2020, 390, 70,
-      2200, 625, 70,
-      2140, 1290, 60,
-      2294, 1676, 60,
-      2650, 1897, 60,
-      3210, 2070, 60,
-      3363, 2384, 60,
-      3000, 2380, 60,
-      2520, 2096, 60,
-      2070, 2056, 50,
-      2184, 1814, 50,
-      1990, 1620, 50,
-      1796, 1800, 50,
-      1940, 2060, 60,
-      1430, 2067, 70,
-      1046, 2420, 70,
-      736, 2340, 70,
-      804, 2020, 80,
-      1120, 1900, 80
+    mMainPath: [
+      222, 44, 8,
+      137, 56, 8,
+      100, 112, 8,
+      122, 206, 7,
+      181, 210, 7,
+      215, 129, 6,
+      256, 169, 6,
+      291, 159, 5,
+      308, 103, 5,
+      355, 87, 6,
+      358, 62, 7,
+      324, 51, 8
+    ],
+    mMetadata: [
+      'Atlantis',
+      0xffd56a,
+      () => terrainGenerate(
+        [
+          { mHeight: 0, mColor: colorUnpack(0xffb36f02) },
+          { mHeight: 9, mColor: colorUnpack(0xffddaa02) },
+          { mHeight: 10, mColor: colorUnpack(0xfff6f5cf) }
+        ], 16
+      ),
+      1, 0, 9, 2,
+      (cloudsOffset: Vec2, waterOffset: Vec2, delta: number) => (moveClouds(cloudsOffset, delta), moveWater(waterOffset, delta))
+    ],
+  },
+  {
+    mMainPath: [
+      169, 162, 8,
+      191, 126, 8,
+      185, 64, 7,
+      202, 39, 7,
+      220, 62, 7,
+      214, 129, 6,
+      229, 167, 6,
+      265, 189, 6,
+      321, 207, 6,
+      336, 238, 6,
+      300, 238, 6,
+      252, 209, 6,
+      207, 205, 5,
+      218, 181, 5,
+      199, 162, 5,
+      179, 180, 5,
+      194, 206, 6,
+      143, 206, 7,
+      104, 242, 7,
+      73, 234, 7,
+      80, 202, 8,
+      112, 190, 8
+    ],
+    mMetadata: [
+      'Dunes',
+      0xd6fc66,
+      () => terrainGenerate(
+        [
+          { mHeight: 0, mColor: colorUnpack(0xff05a0e7) },
+          { mHeight: 3, mColor: colorUnpack(0xff17bdfa) },
+          { mHeight: 7, mColor: colorUnpack(0xff17d8fa) },
+          { mHeight: 10, mColor: colorUnpack(0xff39eafd) }
+        ], 16
+      ),
+      3, 0, 0, 1,
+      () => {}
     ]
   },
   {
-    mainPath: [
-      2260, 1716, 80,
-      2750, 1220, 70,
-      3195, 647, 70,
-      3320, 590, 65,
-      3424, 684, 65,
-      3230, 890, 65,
-      2660, 1584, 65,
-      2700, 1720, 65,
-      3010, 1840, 65,
-      2930, 2020, 60,
-      2514, 1870, 60,
-      2557, 2140, 60,
-      2424, 2230, 60,
-      1445, 2620, 60,
-      1316, 2483, 65,
-      1296, 2150, 65,
-      1250, 1820, 65,
-      895, 1770, 60,
-      870, 1560, 50,
-      680, 1530, 50,
-      693, 1270, 50,
-      1050, 1270, 60,
-      1095, 985, 65,
-      1320, 1000, 65,
-      1330, 1270, 70,
-      1560, 2235, 70
+    mMainPath: [
+      200, 63, 8,
+      257, 65, 8,
+      276, 73, 8,
+      263, 90, 9,
+      234, 125, 10,
+      242, 152, 10,
+      274, 180, 9,
+      288, 194, 8,
+      277, 204, 8,
+      225, 209, 7,
+      171, 218, 7,
+      178, 188, 6,
+      200, 147, 5,
+      175, 115, 5,
+      150, 137, 5,
+      142, 172, 6,
+      130, 182, 6,
+      121, 170, 6,
+      132, 130, 7,
+      152, 71, 8
+    ],
+    mMetadata: [
+      'Haunted Hills',
+      0xa3804b,
+      () => terrainGenerate(
+        [
+          { mHeight: 0, mColor: colorUnpack(0xff008600) },
+          { mHeight: 2, mColor: colorUnpack(0xff498d70) },
+          { mHeight: 4, mColor: colorUnpack(0xff669493) },
+          { mHeight: 8, mColor: colorUnpack(0xffaaaaaa) },
+          { mHeight: 10, mColor: colorUnpack(0xffffffff) }
+        ], 16
+      ),
+      9, 1, 0, 3,
+      (cloudsOffset: Vec2, _: Vec2, delta: number) => moveClouds(cloudsOffset, delta)
     ]
   },
   {
-    mainPath: [
-      2000, 630, 80,
-      2577, 650, 80,
-      2790, 700, 80,
-      2630, 904, 90,
-      2340, 1250, 100,
-      2424, 1526, 100,
-      2740, 1800, 90,
-      2900, 1946, 80,
-      2775, 2045, 80,
-      2250, 2090, 80,
-      1710, 2195, 80,
-      1830, 1880, 80,
-      1960, 1480, 80,
-      1754, 1153, 80,
-      1500, 1374, 80,
-      1420, 1730, 60,
-      1330, 1860, 60,
-      1240, 1724, 60,
-      1334, 1310, 60,
-      1524, 710, 80
+    mMainPath: [
+      226, 171, 7,
+      275, 122, 7,
+      319, 65, 7,
+      332, 59, 6,
+      342, 68, 6,
+      323, 89, 6,
+      266, 158, 5,
+      270, 172, 5,
+      301, 184, 5,
+      293, 202, 4,
+      251, 187, 4,
+      256, 214, 4,
+      242, 223, 4,
+      144, 262, 5,
+      131, 248, 5,
+      129, 215, 5,
+      125, 182, 5,
+      89, 177, 5,
+      87, 156, 5,
+      68, 153, 5,
+      69, 127, 5,
+      105, 127, 6,
+      109, 98, 6,
+      132, 100, 6,
+      133, 127, 7,
+      156, 223, 7
+    ],
+    mMetadata: [
+      'Icy Mist',
+      0xc382df,
+      () => terrainGenerate(
+        [
+          { mHeight: 0, mColor: colorUnpack(0xffffde96) },
+          { mHeight: 5, mColor: colorUnpack(0xffffa696) },
+          { mHeight: 10, mColor: colorUnpack(0xfffdb6db) }
+        ], 16
+      ),
+      6, 1, 4, 6,
+      (cloudsOffset: Vec2, _: Vec2, delta: number) => moveClouds(cloudsOffset, delta)
+    ]
+  },
+  {
+    mMainPath: [
+      189, 162, 8,
+      93, 158, 7,
+      71, 142, 6,
+      82, 123, 5,
+      105, 125, 4,
+      120, 147, 4,
+      136, 142, 4,
+      130, 112, 5,
+      77, 82, 5,
+      37, 44, 4,
+      75, 33, 4,
+      217, 36, 4,
+      299, 57, 5,
+      353, 81, 6,
+      350, 130, 6,
+      385, 164, 7,
+      381, 249, 7,
+      354, 277, 8,
+      331, 249, 9,
+      331, 196, 8,
+      290, 184, 9,
+      267, 225, 7,
+      299, 287, 7,
+      276, 317, 6,
+      277, 375, 6,
+      227, 389, 5,
+      162, 354, 5,
+      155, 300, 5,
+      171, 256, 4,
+      160, 227, 4,
+      98, 274, 4,
+      54, 237, 5,
+      68, 203, 5,
+      218, 201, 6,
+      238, 171, 7
+    ],
+    mMetadata: [
+      "Dragon's Lair",
+      0x2337a5,
+      () => terrainGenerate(
+        [
+          { mHeight: 0, mColor: colorUnpack(0xff00006d) },
+          { mHeight: 2, mColor: colorUnpack(0xff0202b2) },
+          { mHeight: 6, mColor: colorUnpack(0xff000080) },
+          { mHeight: 9, mColor: colorUnpack(0xff008ee8) },
+          { mHeight: 10, mColor: colorUnpack(0xff008ee8) }
+        ], 16
+      ),
+      2, 1, 3, 2,
+      (cloudsOffset: Vec2, waterOffset: Vec2, delta: number) => (moveClouds(cloudsOffset, delta), moveWater(waterOffset, delta))
     ]
   }
 ]
