@@ -11,11 +11,7 @@ function run(time: number) {
   const delta = time - currentTime;
   Game.mProcess(Game, delta * 0.001);
 
-    const delta = time - currentTime;
-    game.process(game, delta * 0.001);
-
-    currentTime = time;
-  }
-
-  run(currentTime);
+  currentTime = time;
 }
+
+run(currentTime);
