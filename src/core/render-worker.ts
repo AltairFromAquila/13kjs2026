@@ -1,62 +1,19 @@
 import { vec2New } from "../math";
-import { kRenderWorkerOpAssignPlanes, kRenderWorkerOpRenderProjectedPlaneFragment, kRenderWorkerOpSetCachedValues, kRenderWorkerOpSetColors, kRenderWorkerOpSetFogValues, kRenderWorkerOpSetTanTables, type BaseRenderState, type RenderFrameCache } from "./base-render";
+import { kRenderWorkerOpAssignPlanes, kRenderWorkerOpRenderProjectionFragment, kRenderWorkerOpSetColors, kRenderWorkerOpSetFogValues, kRenderWorkerOpSetTanTables, renderRenderProjection, type AssignPlanesData, type BaseRenderState, type RenderProjectionFragmentData, type SetColorsData, type SetFogValuesData, type SetTanTablesData } from "./base-render";
 
-type AssignPlanesData = [
-  opCode: typeof kRenderWorkerOpAssignPlanes,
-  trackPixels: Uint32Array | 0,
-  cloudsPixels: Uint32Array | 0,
-  terrainPixels: Uint32Array | 0,
-  trackWidth: number,
-  cloudsWidth: number,
-  terrainWidth: number,
-  skyCloudsHeight: number,
-  cloudsHeight: number,
-  terrainHeight: number
-];
-type SetFogValuesData = [
-  opCode: typeof kRenderWorkerOpSetFogValues,
-  distance: number,
-  intensity: number
-];
-type SetColorsData = [
-  opCode: typeof kRenderWorkerOpSetColors,
-  skyColor: number,
-  groundColor: number
-];
-type SetTanTablesData = [
-  opCode: typeof kRenderWorkerOpSetTanTables,
-  verTanTable: number[],
-  horTanTable: number[]
-];
-type SetCachedValuesData = [
-  opCode: typeof kRenderWorkerOpSetCachedValues,
-  camAngleSin: number,
-  camAngleCos: number,
-  camPitchSin: number,
-  camPitchCos: number
-];
-type RenderProjectedPlaneFragmentData = [
-  opCode: typeof kRenderWorkerOpRenderProjectedPlaneFragment,
-  imageFragment: Uint32Array,
-  width: number,
-  startLine: number,
-  lines: number
-]
 type AnyRenderOp =
-  typeof kRenderWorkerOpRenderProjectedPlaneFragment |
+  typeof kRenderWorkerOpRenderProjectionFragment |
   typeof kRenderWorkerOpAssignPlanes |
   typeof kRenderWorkerOpSetFogValues |
   typeof kRenderWorkerOpSetColors |
-  typeof kRenderWorkerOpSetTanTables |
-  typeof kRenderWorkerOpSetCachedValues;
+  typeof kRenderWorkerOpSetTanTables;
 
 type RenderWorkerPayloadByOp = {
-  [kRenderWorkerOpRenderProjectedPlaneFragment]: RenderProjectedPlaneFragmentData;
+  [kRenderWorkerOpRenderProjectionFragment]: RenderProjectionFragmentData;
   [kRenderWorkerOpAssignPlanes]: AssignPlanesData;
   [kRenderWorkerOpSetFogValues]: SetFogValuesData;
   [kRenderWorkerOpSetColors]: SetColorsData;
   [kRenderWorkerOpSetTanTables]: SetTanTablesData;
-  [kRenderWorkerOpSetCachedValues]: SetCachedValuesData;
 };
 type AnyRenderData = RenderWorkerPayloadByOp[AnyRenderOp];
 
@@ -85,17 +42,22 @@ const renderState: BaseRenderState = {
   mFogDistance: 0.2,
   mFogIntensity: 1.1,
 };
-const renderFrameCache: RenderFrameCache = {
-  mCamAngleSin: 0,
-  mCamAngleCos: 0,
-  mCamPitchSin: 0,
-  mCamPitchCos: 0,
-};
 
 const renderWorkerOperations: {
   [K in AnyRenderOp]: (args: RenderWorkerPayloadByOp[K]) => void;
 } = {
-  [kRenderWorkerOpRenderProjectedPlaneFragment]: (args: RenderProjectedPlaneFragmentData) => {},
+  [kRenderWorkerOpRenderProjectionFragment]: (args: RenderProjectionFragmentData) => {
+    renderRenderProjection(
+      renderState,
+      args[1], args[2], args[3],
+      args[4], args[5], args[6],
+      args[7], args[8],
+      args[9], args[10],
+      args[11]
+    );
+
+    self.postMessage(args[11], [args[11].buffer]);
+  },
   [kRenderWorkerOpAssignPlanes]: (args: AssignPlanesData) => {
     renderState.mTrackPixels = args[1];
     renderState.mCloudsPixels = args[2];
@@ -121,24 +83,17 @@ const renderWorkerOperations: {
     renderState.mVerTanTable = args[1];
     renderState.mHorTanTable = args[2];
   },
-  [kRenderWorkerOpSetCachedValues]: (args: SetCachedValuesData) => {
-    renderFrameCache.mCamAngleSin = args[1];
-    renderFrameCache.mCamAngleCos = args[2];
-    renderFrameCache.mCamPitchSin = args[3];
-    renderFrameCache.mCamPitchCos = args[4];
-  },
 }
 
 self.onmessage = (event) => {
   const data = event.data;
   if (
     Array.isArray(data) && (
-      data[0] === kRenderWorkerOpRenderProjectedPlaneFragment ||
+      data[0] === kRenderWorkerOpRenderProjectionFragment ||
       data[0] === kRenderWorkerOpAssignPlanes ||
       data[0] === kRenderWorkerOpSetFogValues ||
       data[0] === kRenderWorkerOpSetColors ||
-      data[0] === kRenderWorkerOpSetTanTables ||
-      data[0] === kRenderWorkerOpSetCachedValues
+      data[0] === kRenderWorkerOpSetTanTables
     )
   ) {
     const op = data[0] as AnyRenderOp;

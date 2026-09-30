@@ -1,13 +1,33 @@
-import { colorBlend, colorPack, colorUnpack, kMathEpsilon, kMathHalfPi, kMathPi, kMathTau, mathAbs, mathAtan2, mathClamp, mathCos, mathMax, mathMod, mathSin, mathTan, vec2New, type Vec2 } from "../math";
+import { kMathEpsilon, kMathHalfPi, kMathPi, kMathTau, mathAbs, mathAtan2, mathClamp, mathCos, mathMin, mathMod, mathSin, mathTan, vec2New, type Vec2 } from "../math";
 import type { Camera } from "../core/camera";
 import { canvas, ctxCreateOffscreenCanvas, ctx, ctxGetCanvasImageData } from "../sys/context";
 import type { Entity } from "./entity";
-import { renderRenderProjection, type BaseRenderState, type RenderFrameCache } from "./base-render";
+import {
+  kRenderWorkerOpRenderProjectionFragment,
+  kRenderWorkerOpAssignPlanes,
+  kRenderWorkerOpSetColors,
+  kRenderWorkerOpSetFogValues,
+  kRenderWorkerOpSetTanTables,
+  renderRenderProjection,
+  type AssignPlanesData,
+  type BaseRenderState,
+  type RenderProjectionFragmentData,
+  type SetColorsData,
+  type SetFogValuesData,
+  type SetTanTablesData
+} from "./base-render";
 
 interface RenderState extends BaseRenderState {
   mPrevVerticalFov: number;
   mPrevCanvasWidth: number;
   mPrevCanvasHeight:number;
+}
+
+export interface RenderFrameCache {
+  mCamAngleSin: number;
+  mCamAngleCos: number;
+  mCamPitchSin: number;
+  mCamPitchCos: number;
 }
 
 export interface Renderable extends Entity {
@@ -30,6 +50,30 @@ interface SortedRenderable<R extends Renderable = Renderable> {
   mScale: number;
   mAlpha: number;
 }
+
+interface RenderWorker {
+  mWorker: Worker;
+  mInFlightBuffer: Uint32Array | 0;
+  mStartLine: number;
+  mLines: number;
+}
+
+interface RenderWorkerPoolState {
+  mWorkers: RenderWorker[];
+  mWorkerCount: number;
+  mFrameInFlight: boolean;
+  mDiscardFrame: boolean;
+  mPendingCount: number;
+  mInFlightWidth: number;
+  mInFlightHeight: number;
+}
+
+type RenderWorkersArgs =
+  RenderProjectionFragmentData |
+  AssignPlanesData |
+  SetFogValuesData |
+  SetColorsData |
+  SetTanTablesData;
 
 const renderState: RenderState = {
   mVerTanTable: [],
@@ -77,17 +121,145 @@ let {
   mPixels: projectionPixels,
 } = ctxGetCanvasImageData(canvas.width, canvas.height, projectionCtx);
 
-const renderProjectedPlane = (camera: Camera) => {
-  renderRenderProjection(
-    renderState,
-    canvas.width, 0, canvas.height, 
-    camera.mPos.x, camera.mPos.y, camera.mHeight,
-    renderFrameCache.mCamAngleSin, renderFrameCache.mCamAngleCos,
-    renderFrameCache.mCamPitchSin, renderFrameCache.mCamPitchCos,
-    projectionPixels
-  );
+const kRenderWorkersCap = 16;
 
-  projectionCtx.putImageData(projectionImageData, 0, 0);
+export const renderWorkerPoolState: RenderWorkerPoolState = (() => {
+  const workers: RenderWorker[] = [];
+  const availableThreads = (typeof navigator !== "undefined" && navigator.hardwareConcurrency > 0)
+    ? navigator.hardwareConcurrency
+    : 1;
+  const workerCount = (typeof Worker === "function")
+    ? mathClamp(availableThreads - 1, 0, kRenderWorkersCap)
+    : 0;
+
+  for (let i = 0; i < workerCount; ++i) {
+    workers.push({
+      mWorker: new Worker(new URL("./render-worker.ts", import.meta.url), { type: "module" }),
+      mInFlightBuffer: 0,
+      mStartLine: 0,
+      mLines: 0,
+    });
+  }
+
+  return {
+    mWorkerCount: workerCount,
+    mWorkers: workers,
+    mFrameInFlight: false,
+    mDiscardFrame: false,
+    mPendingCount: 0,
+    mInFlightWidth: 0,
+    mInFlightHeight: 0,
+  };
+})();
+
+for (let idx = 0; idx < renderWorkerPoolState.mWorkerCount; ++idx) {
+  const renderWorker = renderWorkerPoolState.mWorkers[idx];
+  const worker = renderWorker.mWorker;
+
+  worker.addEventListener("message", (event: MessageEvent<unknown>) => {
+    if (!(event.data instanceof Uint32Array)) {
+      return;
+    }
+
+    renderWorker.mInFlightBuffer = event.data;
+    if (!renderWorkerPoolState.mFrameInFlight) {
+      return;
+    }
+
+    if (!renderWorkerPoolState.mDiscardFrame) {
+      const startLine = renderWorker.mStartLine;
+      const lines = renderWorker.mLines;
+      const outputStartLine = renderWorkerPoolState.mInFlightHeight - (startLine + lines);
+      projectionPixels.set(event.data, outputStartLine * renderWorkerPoolState.mInFlightWidth);
+    }
+
+    renderWorkerPoolState.mPendingCount--;
+    if (renderWorkerPoolState.mPendingCount > 0) {
+      return;
+    }
+
+    const canPresentFrame = !renderWorkerPoolState.mDiscardFrame;
+    renderWorkerPoolState.mFrameInFlight = false;
+    renderWorkerPoolState.mDiscardFrame = false;
+
+    if (canPresentFrame) {
+      projectionCtx.putImageData(projectionImageData, 0, 0);
+    }
+  });
+
+  worker.addEventListener("error", () => {
+    renderWorkerPoolState.mFrameInFlight = false;
+    renderWorkerPoolState.mDiscardFrame = false;
+    renderWorkerPoolState.mPendingCount = 0;
+  });
+}
+
+const renderBroadcastToWorkers = (message: RenderWorkersArgs) => {
+  for (const worker of renderWorkerPoolState.mWorkers) {
+    worker.mWorker.postMessage(message);
+  }
+}
+
+const renderProjection = (camera: Camera) => {
+  const workerCount = mathMin(renderWorkerPoolState.mWorkerCount, canvas.height);
+  const renderWorkers = renderWorkerPoolState.mWorkers;
+
+  if (workerCount > 0) {
+    if (!renderWorkerPoolState.mFrameInFlight) {
+      renderWorkerPoolState.mFrameInFlight = true;
+      renderWorkerPoolState.mDiscardFrame = false;
+      renderWorkerPoolState.mPendingCount = workerCount;
+      renderWorkerPoolState.mInFlightWidth = canvas.width;
+      renderWorkerPoolState.mInFlightHeight = canvas.height;
+
+      const linesPerWorker = (canvas.height / workerCount) | 0;
+      const extraLines = canvas.height - (linesPerWorker * workerCount);
+      let startLine = 0;
+
+      for (let idx = 0; idx < workerCount; ++idx) {
+        const curRenderWorker = renderWorkers[idx];
+        const lines = linesPerWorker + (idx < extraLines ? 1 : 0);
+        const expectedBufferSize = lines * canvas.width;
+        let projectionFragment = curRenderWorker.mInFlightBuffer;
+        if (!projectionFragment || projectionFragment.length !== expectedBufferSize) {
+          projectionFragment = new Uint32Array(expectedBufferSize);
+        }
+
+        curRenderWorker.mStartLine = startLine;
+        curRenderWorker.mLines = lines;
+        curRenderWorker.mInFlightBuffer = 0;
+
+        const renderData: RenderProjectionFragmentData = [
+          kRenderWorkerOpRenderProjectionFragment,
+          canvas.width,
+          startLine,
+          lines,
+          camera.mPos.x,
+          camera.mPos.y,
+          camera.mHeight,
+          renderFrameCache.mCamAngleSin,
+          renderFrameCache.mCamAngleCos,
+          renderFrameCache.mCamPitchSin,
+          renderFrameCache.mCamPitchCos,
+          projectionFragment,
+        ];
+        curRenderWorker.mWorker.postMessage(renderData, [projectionFragment.buffer]);
+
+        startLine += lines;
+      }
+    }
+  } else {
+    renderRenderProjection(
+      renderState,
+      canvas.width, 0, canvas.height,
+      camera.mPos.x, camera.mPos.y, camera.mHeight,
+      renderFrameCache.mCamAngleSin, renderFrameCache.mCamAngleCos,
+      renderFrameCache.mCamPitchSin, renderFrameCache.mCamPitchCos,
+      projectionPixels
+    );
+
+    projectionCtx.putImageData(projectionImageData, 0, 0);
+  }
 }
 
 const renderRenderables = <R extends Renderable>(camera: Camera, renderableCmd: RenderableCommand<R>) => {
@@ -232,16 +404,33 @@ export const renderAssignPlanes = (
   renderState.mSkyCloudsHeight = skyCloudsHeight;
   renderState.mCloudsHeight = cloudsHeight;
   renderState.mTerrainHeight = terrainHeight;
+
+  renderBroadcastToWorkers([
+    kRenderWorkerOpAssignPlanes,
+    trackPixels,
+    cloudsPixels,
+    terrainPixels,
+    trackWidth,
+    cloudsWidth,
+    terrainWidth,
+    skyCloudsHeight,
+    cloudsHeight,
+    terrainHeight
+  ]);
 }
 
 export const renderSetFogValues = (distance: number, intensity: number) => {
   renderState.mFogDistance = distance;
   renderState.mFogIntensity = intensity;
+
+  renderBroadcastToWorkers([kRenderWorkerOpSetFogValues, distance, intensity]);
 }
 
 export const renderSetColors = (skyColor: number, groundColor: number) => {
   renderState.mSkyColor = skyColor;
   renderState.mGroundColor = groundColor;
+
+  renderBroadcastToWorkers([kRenderWorkerOpSetColors, skyColor, groundColor]);
 }
 
 export const renderGetTerrainOffsetRef = () => renderState.mTerrainOffset;
@@ -262,8 +451,17 @@ export const render = <R extends Renderable>(camera: Camera, renderableCmd: Rend
 
     renderUpdateTanTable(canvasHeight, tanHalfVFov, renderState.mVerTanTable);
     renderUpdateTanTable(canvasWidth, tanHalfHFov, renderState.mHorTanTable);
+    renderBroadcastToWorkers([
+      kRenderWorkerOpSetTanTables,
+      renderState.mVerTanTable,
+      renderState.mHorTanTable,
+    ]);
 
     if (canvasSizeChanged) {
+      if (renderWorkerPoolState.mFrameInFlight) {
+        renderWorkerPoolState.mDiscardFrame = true;
+      }
+
       projectionCanvas.width = canvasWidth;
       projectionCanvas.height = canvasHeight;
 
@@ -282,7 +480,7 @@ export const render = <R extends Renderable>(camera: Camera, renderableCmd: Rend
   renderFrameCache.mCamPitchSin = mathSin(camera.mPitch);
   renderFrameCache.mCamPitchCos = mathCos(camera.mPitch);
 
-  renderProjectedPlane(camera);
+  renderProjection(camera);
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(projectionCanvas, 0, 0);

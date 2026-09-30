@@ -26,19 +26,47 @@ export interface BaseRenderState {
   mFogIntensity: number;
 }
 
-export interface RenderFrameCache {
-  mCamAngleSin: number;
-  mCamAngleCos: number;
-  mCamPitchSin: number;
-  mCamPitchCos: number;
-}
+export type AssignPlanesData = [
+  opCode: typeof kRenderWorkerOpAssignPlanes,
+  trackPixels: Uint32Array | 0,
+  cloudsPixels: Uint32Array | 0,
+  terrainPixels: Uint32Array | 0,
+  trackWidth: number,
+  cloudsWidth: number,
+  terrainWidth: number,
+  skyCloudsHeight: number,
+  cloudsHeight: number,
+  terrainHeight: number
+];
+export type SetFogValuesData = [
+  opCode: typeof kRenderWorkerOpSetFogValues,
+  distance: number,
+  intensity: number
+];
+export type SetColorsData = [
+  opCode: typeof kRenderWorkerOpSetColors,
+  skyColor: number,
+  groundColor: number
+];
+export type SetTanTablesData = [
+  opCode: typeof kRenderWorkerOpSetTanTables,
+  verTanTable: number[],
+  horTanTable: number[]
+];
+export type RenderProjectionFragmentData = [
+  opCode: typeof kRenderWorkerOpRenderProjectionFragment,
+  width: number, startLine: number, lines: number,
+  camX: number, camY: number, camHeight: number,
+  camYawSin: number, camYawCos: number,
+  camPitchSin: number, camPitchCos: number,
+  projectionPixels: Uint32Array
+]
 
-export const kRenderWorkerOpRenderProjectedPlaneFragment = 0;
+export const kRenderWorkerOpRenderProjectionFragment = 0;
 export const kRenderWorkerOpAssignPlanes = 1;
 export const kRenderWorkerOpSetFogValues = 2;
 export const kRenderWorkerOpSetColors = 3;
 export const kRenderWorkerOpSetTanTables = 4;
-export const kRenderWorkerOpSetCachedValues = 5;
 
 export const renderRenderProjection = (
   renderState: BaseRenderState,
