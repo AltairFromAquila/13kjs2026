@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/minify-workers.mjs",
     "preview": "vite preview",
     "deps:advcomp": "node scripts/install-advcomp.mjs",
     "deps:advcomp:dry": "node scripts/install-advcomp.mjs --dry-run",

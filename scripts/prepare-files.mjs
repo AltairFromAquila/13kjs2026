@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const rootDir = process.cwd();
 const distDir = path.join(rootDir, 'dist');
+const assetsDir = path.join(distDir, 'assets');
 const sourceIndexPath = path.join(distDir, 'index.html');
 const releaseDistDir = path.join(rootDir, 'release', 'dist');
 
@@ -30,55 +31,102 @@ function run(command, args, options = {}) {
   }
 }
 
-function getBundleInfoFromIndex(indexHtml) {
-  const scriptMatch = indexHtml.match(/<script[^>]*src=\"([^\"]+\.js)\"[^>]*><\/script>/i);
-  if (!scriptMatch) {
-    fail('Could not find a JavaScript <script src="...js"> tag in dist/index.html');
+function listAssetJsFiles() {
+  if (!existsSync(assetsDir)) {
+    fail('dist/assets not found. Run Vite build first.');
   }
 
-  const src = scriptMatch[1];
-  const cleanSrc = src.split('?')[0].split('#')[0];
-  const relativeSrc = cleanSrc.replace(/^\/+/, '');
-  const bundlePath = path.join(distDir, relativeSrc);
-  if (!existsSync(bundlePath)) {
-    fail(`Bundle referenced by index.html does not exist: ${bundlePath}`);
+  const jsFiles = readdirSync(assetsDir)
+    .filter((name) => name.endsWith('.js'))
+    .sort((a, b) => a.localeCompare(b));
+
+  if (jsFiles.length === 0) {
+    fail('No .js files found in dist/assets.');
   }
 
-  const bundleFileName = path.basename(cleanSrc);
-  const bundleBase = bundleFileName.replace(/\.js$/i, '');
-
-  let hash = bundleBase;
-  if (bundleBase.startsWith('index-')) {
-    hash = bundleBase.slice('index-'.length);
-  } else if (bundleBase.includes('-')) {
-    const parts = bundleBase.split('-');
-    hash = parts[parts.length - 1] || bundleBase;
-  }
-
-  if (hash.length < 3) {
-    fail(`Could not derive a 3-character hash from bundle name: ${bundleFileName}`);
-  }
-
-  const shortHash = hash.slice(0, 3);
-  return {
-    scriptSrc: src,
-    bundlePath,
-    shortHash,
-  };
+  return jsFiles;
 }
 
-function updateIndexScriptTag(indexHtml, oldSrc, newSrc) {
-  const escapedOldSrc = oldSrc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const exactSrcPattern = new RegExp(`<script[^>]*src=\\"${escapedOldSrc}\\"[^>]*><\\/script>`, 'i');
+function getShortTokenFromFileName(fileName) {
+  const bundleBase = fileName.replace(/\.js$/i, '');
+  let token = bundleBase;
 
-  if (exactSrcPattern.test(indexHtml)) {
-    return indexHtml.replace(exactSrcPattern, `<script src=\"${newSrc}\" defer></script>`);
+  if (bundleBase.startsWith('index-')) {
+    token = bundleBase.slice('index-'.length);
+  } else if (bundleBase.includes('-')) {
+    const parts = bundleBase.split('-');
+    token = parts[parts.length - 1] || bundleBase;
   }
 
-  return indexHtml.replace(
-    /<script[^>]*src=\"[^\"]+\.js\"[^>]*><\/script>/i,
-    `<script src=\"${newSrc}\" defer></script>`
+  if (token.length < 3) {
+    fail(`Could not derive a 3-character short token from bundle name: ${fileName}`);
+  }
+
+  return token;
+}
+
+function buildShortFileNameMap(fileNames) {
+  const used = new Set();
+  const map = new Map();
+
+  for (const fileName of fileNames) {
+    const token = getShortTokenFromFileName(fileName);
+    let short = token.slice(0, 3);
+
+    let width = 4;
+    while (used.has(short) && width <= token.length) {
+      short = token.slice(0, width);
+      width += 1;
+    }
+
+    if (used.has(short)) {
+      let counter = 2;
+      let candidate = `${short}${counter}`;
+      while (used.has(candidate)) {
+        counter += 1;
+        candidate = `${short}${counter}`;
+      }
+      short = candidate;
+    }
+
+    used.add(short);
+    map.set(fileName, `${short}.js`);
+  }
+
+  return map;
+}
+
+function replaceAssetReferences(content, fileNameMap) {
+  let updated = content;
+
+  for (const [oldFileName, newFileName] of fileNameMap) {
+    updated = updated.replaceAll(`/assets/${oldFileName}`, newFileName);
+    updated = updated.replaceAll(`assets/${oldFileName}`, newFileName);
+    updated = updated.replaceAll(oldFileName, newFileName);
+  }
+
+  return updated;
+}
+
+function rewriteJsAssetReferences(bundlePath, fileNameMap) {
+  const js = readFileSync(bundlePath, 'utf8');
+  const updated = replaceAssetReferences(js, fileNameMap);
+
+  if (updated !== js) {
+    writeFileSync(bundlePath, updated, 'utf8');
+  }
+}
+
+function rewriteImportMetaUrlBase(bundlePath) {
+  const js = readFileSync(bundlePath, 'utf8');
+  const updated = js.replace(
+    /new URL\((['"][^'"]+\.js['"])\s*,\s*(?:""|'')\s*\+\s*import\.meta\.url\)/g,
+    'new URL($1,location.href)'
   );
+
+  if (updated !== js) {
+    writeFileSync(bundlePath, updated, 'utf8');
+  }
 }
 
 function replaceConstWithLet(bundlePath) {
@@ -99,27 +147,49 @@ function main() {
   }
 
   const sourceIndexHtml = readFileSync(sourceIndexPath, 'utf8');
-  const bundleInfo = getBundleInfoFromIndex(sourceIndexHtml);
+  const jsFiles = listAssetJsFiles();
+  const fileNameMap = buildShortFileNameMap(jsFiles);
 
   rmSync(releaseDistDir, { recursive: true, force: true });
   mkdirSync(releaseDistDir, { recursive: true });
 
-  const outJsFileName = `${bundleInfo.shortHash}.js`;
-  const outJsPath = path.join(releaseDistDir, outJsFileName);
+  let totalConstReplacements = 0;
 
-  const replacements = replaceConstWithLet(bundleInfo.bundlePath);
-  console.log(`[prepare-files] Replaced const declarations: ${replacements}`);
-  run('npx', ['roadroller', '-O', '2', '-o', outJsPath, bundleInfo.bundlePath]);
+  for (const jsFileName of jsFiles) {
+    const sourceJsPath = path.join(assetsDir, jsFileName);
+    const tempJsPath = path.join(releaseDistDir, `__tmp__${jsFileName}`);
+    const outJsFileName = fileNameMap.get(jsFileName);
+
+    if (!outJsFileName) {
+      fail(`No mapped output filename found for ${jsFileName}`);
+    }
+
+    const outJsPath = path.join(releaseDistDir, outJsFileName);
+
+    cpSync(sourceJsPath, tempJsPath);
+    rewriteJsAssetReferences(tempJsPath, fileNameMap);
+    rewriteImportMetaUrlBase(tempJsPath);
+
+    const replacements = replaceConstWithLet(tempJsPath);
+    totalConstReplacements += replacements;
+
+    run('npx', ['roadroller', '-O', '2', '-o', outJsPath, tempJsPath]);
+    rmSync(tempJsPath, { force: true });
+  }
+
+  console.log(`[prepare-files] Replaced const declarations: ${totalConstReplacements}`);
 
   cpSync(sourceIndexPath, path.join(releaseDistDir, 'index.html'));
 
   const releaseIndexPath = path.join(releaseDistDir, 'index.html');
   const releaseIndexHtml = readFileSync(releaseIndexPath, 'utf8');
-  const updatedIndexHtml = updateIndexScriptTag(releaseIndexHtml, bundleInfo.scriptSrc, outJsFileName);
+  const updatedIndexHtml = replaceAssetReferences(releaseIndexHtml, fileNameMap);
   writeFileSync(releaseIndexPath, updatedIndexHtml, 'utf8');
 
   console.log(`[prepare-files] Created ${path.relative(rootDir, releaseDistDir)}`);
-  console.log(`[prepare-files] JS output: ${path.join('release', 'dist', outJsFileName)}`);
+  for (const [oldFileName, newFileName] of fileNameMap) {
+    console.log(`[prepare-files] JS output: ${path.join('release', 'dist', newFileName)} (from ${oldFileName})`);
+  }
 }
 
 main();
