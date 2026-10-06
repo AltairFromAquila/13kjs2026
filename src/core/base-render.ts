@@ -1,4 +1,4 @@
-import { colorBlend, colorPack, colorUnpack, kMathEpsilon, mathAbs, mathClamp, mathMax, type Vec2 } from "../math";
+import { colorPack, colorUnpack, kMathEpsilon, mathAbs, mathClamp, mathMax, type Vec2 } from "../math";
 
 export interface BaseRenderState {
   mVerTanTable: number[];
@@ -77,41 +77,43 @@ export const renderRenderProjection = (
   projectionPixels: Uint32Array
 ) => {
   const blendAbgr = (src: number, dst: number, t: number): number => {
-    const res = colorBlend(colorUnpack(src), colorUnpack(dst), t);
-    return colorPack(
-      res.r, res.g, res.b, res.a
-    );
+    if (t <= 0) return src;
+    if (t >= 1) return dst;
+
+    const alpha = (t * 256) | 0;
+    const invAlpha = 256 - alpha;
+
+    const srcRB = src & 0x00ff00ff;
+    const dstRB = dst & 0x00ff00ff;
+    const srcGA = (src >>> 8) & 0x00ff00ff;
+    const dstGA = (dst >>> 8) & 0x00ff00ff;
+
+    const resRB = (srcRB * invAlpha + dstRB * alpha) >>> 8;
+    const resGA = (srcGA * invAlpha + dstGA * alpha);
+
+    return ((resRB & 0x00ff00ff) | (resGA & 0xff00ff00));
   }
 
   const overAbgr = (top: number, bottom: number): number => {
-    const {
-      r: topR,
-      g: topG,
-      b: topB,
-      a: topA
-    } = colorUnpack(top);
-    if (topA === 0xff) return top;
+    const topA = (top >> 24) & 255;
+    
+    if (topA === 255) return top;
     if (topA === 0) return bottom;
 
     const invTopA = 255 - topA;
-    const {
-      r: botR,
-      g: botG,
-      b: botB,
-      a: botA
-    } = colorUnpack(bottom);
 
-    const outR = ((topR * topA) + (botR * invTopA)) / 255;
-    const outG = ((topG * topA) + (botG * invTopA)) / 255;
-    const outB = ((topB * topA) + (botB * invTopA)) / 255;
+    const botRB = bottom & 0x00ff00ff;
+    const topRB = top & 0x00ff00ff;
+    const botGA = (bottom >>> 8) & 0x00ff00ff;
+    const topGA = (top >>> 8) & 0x00ff00ff;
+
+    const resRB = (botRB * invTopA + topRB * topA) >>> 8;
+    const resGA = (botGA * invTopA + topGA * topA);
+
+    const botA = (bottom >> 24) & 255;
     const outA = topA + ((botA * invTopA) / 255);
 
-    return colorPack(
-      outR & 255,
-      outG & 255,
-      outB & 255,
-      outA & 255,
-    );
+    return (outA << 24) | ((resRB & 0x00ff00ff) | (resGA & 0x0000ff00));
   }
 
   const trackRowStride = renderState.mTrackWidth

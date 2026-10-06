@@ -1,6 +1,7 @@
 import { kMathEpsilon, kMathHalfPi, kMathPi, kMathTau, mathAbs, mathAtan2, mathClamp, mathCos, mathMin, mathMod, mathSin, mathTan, vec2New, type Vec2 } from "../math";
 import type { Camera } from "../core/camera";
 import { canvas, ctxCreateOffscreenCanvas, ctx, ctxGetCanvasImageData } from "../sys/context";
+import { isCrossOriginIsolated } from "../sys/window";
 import type { Entity } from "./entity";
 import {
   kRenderWorkerOpRenderProjectionFragment,
@@ -120,8 +121,45 @@ let {
   mImage: projectionImageData,
   mPixels: projectionPixels,
 } = ctxGetCanvasImageData(canvas.width, canvas.height, projectionCtx);
+let projectionSharedPixels: Uint32Array | 0 = 0;
 
 const kRenderWorkersCap = 16;
+const kRenderCanUseSharedBuffers =
+  typeof SharedArrayBuffer === "function" &&
+  isCrossOriginIsolated;
+
+const renderCreateSharedPixels = (pixels: Uint32Array | 0): Uint32Array | 0 => {
+  if (!pixels || !kRenderCanUseSharedBuffers) {
+    return pixels;
+  }
+
+  if (pixels.buffer instanceof SharedArrayBuffer) {
+    return pixels;
+  }
+
+  const sharedBuffer = new SharedArrayBuffer(pixels.byteLength);
+  const sharedPixels = new Uint32Array(sharedBuffer);
+  sharedPixels.set(pixels);
+  return sharedPixels;
+}
+
+const renderEnsureSharedProjectionPixels = (width: number, height: number) => {
+  if (!kRenderCanUseSharedBuffers) {
+    projectionSharedPixels = 0;
+    return;
+  }
+
+  const pixelCount = width * height;
+  if (projectionSharedPixels && projectionSharedPixels.length === pixelCount) {
+    return;
+  }
+
+  projectionSharedPixels = new Uint32Array(
+    new SharedArrayBuffer(pixelCount * Uint32Array.BYTES_PER_ELEMENT)
+  );
+}
+
+renderEnsureSharedProjectionPixels(canvas.width, canvas.height);
 
 export const renderWorkerPoolState: RenderWorkerPoolState = (() => {
   const workers: RenderWorker[] = [];
@@ -157,20 +195,22 @@ for (let idx = 0; idx < renderWorkerPoolState.mWorkerCount; ++idx) {
   const worker = renderWorker.mWorker;
 
   worker.addEventListener("message", (event: MessageEvent<unknown>) => {
-    if (!(event.data instanceof Uint32Array)) {
+    if (!(event.data instanceof Uint32Array) && event.data !== kRenderWorkerOpRenderProjectionFragment) {
       return;
     }
 
-    renderWorker.mInFlightBuffer = event.data;
+    if (!kRenderCanUseSharedBuffers) {
+      renderWorker.mInFlightBuffer = event.data;
+    }
     if (!renderWorkerPoolState.mFrameInFlight) {
       return;
     }
 
-    if (!renderWorkerPoolState.mDiscardFrame) {
+    if (!kRenderCanUseSharedBuffers && !renderWorkerPoolState.mDiscardFrame) {
       const startLine = renderWorker.mStartLine;
       const lines = renderWorker.mLines;
       const outputStartLine = renderWorkerPoolState.mInFlightHeight - (startLine + lines);
-      projectionPixels.set(event.data, outputStartLine * renderWorkerPoolState.mInFlightWidth);
+      projectionPixels.set(event.data as Uint32Array, outputStartLine * renderWorkerPoolState.mInFlightWidth);
     }
 
     renderWorkerPoolState.mPendingCount--;
@@ -183,6 +223,9 @@ for (let idx = 0; idx < renderWorkerPoolState.mWorkerCount; ++idx) {
     renderWorkerPoolState.mDiscardFrame = false;
 
     if (canPresentFrame) {
+      if (kRenderCanUseSharedBuffers && projectionSharedPixels) {
+        projectionPixels.set(projectionSharedPixels);
+      }
       projectionCtx.putImageData(projectionImageData, 0, 0);
     }
   });
@@ -205,6 +248,8 @@ const renderProjection = (camera: Camera) => {
   const renderWorkers = renderWorkerPoolState.mWorkers;
 
   if (workerCount > 0) {
+    renderEnsureSharedProjectionPixels(canvas.width, canvas.height);
+
     if (!renderWorkerPoolState.mFrameInFlight) {
       renderWorkerPoolState.mFrameInFlight = true;
       renderWorkerPoolState.mDiscardFrame = false;
@@ -220,14 +265,29 @@ const renderProjection = (camera: Camera) => {
         const curRenderWorker = renderWorkers[idx];
         const lines = linesPerWorker + (idx < extraLines ? 1 : 0);
         const expectedBufferSize = lines * canvas.width;
-        let projectionFragment = curRenderWorker.mInFlightBuffer;
-        if (!projectionFragment || projectionFragment.length !== expectedBufferSize) {
-          projectionFragment = new Uint32Array(expectedBufferSize);
+        const outputStartLine = canvas.height - (startLine + lines);
+        let projectionFragment: Uint32Array;
+
+        if (kRenderCanUseSharedBuffers) {
+          const sharedProjectionPixels = projectionSharedPixels;
+          if (!sharedProjectionPixels) {
+            projectionFragment = new Uint32Array(expectedBufferSize);
+          } else {
+            projectionFragment = new Uint32Array(
+              sharedProjectionPixels.buffer,
+              outputStartLine * canvas.width * Uint32Array.BYTES_PER_ELEMENT,
+              expectedBufferSize
+            );
+          }
+        } else {
+          projectionFragment = curRenderWorker.mInFlightBuffer as Uint32Array;
+          if (!projectionFragment || projectionFragment.length !== expectedBufferSize) {
+            projectionFragment = new Uint32Array(expectedBufferSize);
+          }
         }
 
         curRenderWorker.mStartLine = startLine;
         curRenderWorker.mLines = lines;
-        curRenderWorker.mInFlightBuffer = 0;
 
         const renderData: RenderProjectionFragmentData = [
           kRenderWorkerOpRenderProjectionFragment,
@@ -243,7 +303,12 @@ const renderProjection = (camera: Camera) => {
           renderFrameCache.mCamPitchCos,
           projectionFragment,
         ];
-        curRenderWorker.mWorker.postMessage(renderData, [projectionFragment.buffer]);
+        if (kRenderCanUseSharedBuffers) {
+          curRenderWorker.mWorker.postMessage(renderData);
+        } else {
+          curRenderWorker.mInFlightBuffer = 0;
+          curRenderWorker.mWorker.postMessage(renderData, [projectionFragment.buffer]);
+        }
 
         startLine += lines;
       }
@@ -393,9 +458,13 @@ export const renderAssignPlanes = (
   cloudsHeight: number,
   terrainHeight: number
 ) => {
-  renderState.mTrackPixels = trackPixels;
-  renderState.mCloudsPixels = cloudsPixels;
-  renderState.mTerrainPixels = terrainPixels;
+  const trackPixelsForRender = renderCreateSharedPixels(trackPixels);
+  const cloudsPixelsForRender = renderCreateSharedPixels(cloudsPixels);
+  const terrainPixelsForRender = renderCreateSharedPixels(terrainPixels);
+
+  renderState.mTrackPixels = trackPixelsForRender;
+  renderState.mCloudsPixels = cloudsPixelsForRender;
+  renderState.mTerrainPixels = terrainPixelsForRender;
 
   renderState.mTrackWidth = trackWidth;
   renderState.mCloudsWidth = cloudsWidth;
@@ -407,9 +476,9 @@ export const renderAssignPlanes = (
 
   renderBroadcastToWorkers([
     kRenderWorkerOpAssignPlanes,
-    trackPixels,
-    cloudsPixels,
-    terrainPixels,
+    trackPixelsForRender,
+    cloudsPixelsForRender,
+    terrainPixelsForRender,
     trackWidth,
     cloudsWidth,
     terrainWidth,

@@ -1,5 +1,5 @@
 import { defineConfig } from 'vite';
-import htmlMinifier from 'vite-plugin-html-minifier'
+import htmlMinifier from 'vite-plugin-html-minifier';
 
 export default defineConfig({
   build: {
@@ -33,6 +33,12 @@ export default defineConfig({
   plugins: [
     htmlMinifier({
       minify: true,
-    }),
+    })
   ],
+  server: {
+    headers: {
+      "Cross-Origin-Embedder-Policy": "require-corp",
+      "Cross-Origin-Opener-Policy": "same-origin",
+    },
+  },
 });

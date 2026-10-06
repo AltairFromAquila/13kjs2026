@@ -56,7 +56,11 @@ const renderWorkerOperations: {
       args[11]
     );
 
-    self.postMessage(args[11], [args[11].buffer]);
+    if (args[11].buffer instanceof SharedArrayBuffer) {
+      self.postMessage(kRenderWorkerOpRenderProjectionFragment);
+    } else {
+      self.postMessage(args[11], [args[11].buffer]);
+    }
   },
   [kRenderWorkerOpAssignPlanes]: (args: AssignPlanesData) => {
     renderState.mTrackPixels = args[1];

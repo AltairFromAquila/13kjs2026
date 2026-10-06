@@ -18,3 +18,5 @@ export const windowRemoveEventListener = <K extends keyof WindowEventMap>(
 ) => {
   window.removeEventListener(type, listener, options);
 };
+
+export const isCrossOriginIsolated = self.crossOriginIsolated;
