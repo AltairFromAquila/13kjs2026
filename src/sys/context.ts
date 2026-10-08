@@ -1,4 +1,4 @@
-import { windowAddEventListener } from "./window";
+import { windowAddEventListener, windowIsMobile } from "./window";
 
 export type AnyCanvasRenderingContext2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
@@ -11,14 +11,28 @@ const kAvailableScreenHeights = [480, 720, 900, 1080, 1440]
 const onResize = () => {
   const docEl = doc.documentElement;
   const height = docEl.clientHeight;
+  const width = docEl.clientWidth;
+  const isPortraitMobile = windowIsMobile() && height > width;
+
+  if (isPortraitMobile) {
+    const scrWidthIdx = kAvailableScreenHeights.findIndex(v => v > width) - 1;
+    const targetWidth = (scrWidthIdx > -1)
+      ? kAvailableScreenHeights[scrWidthIdx]
+      : (scrWidthIdx === -1) ? 480 : 1440;
+    const tallHeight = targetWidth * 16/9;
+
+    canvas.width = targetWidth;
+    canvas.height = (tallHeight > height) ? (targetWidth * 4/3) : tallHeight;
+    return;
+  }
+
   const scrHeightIdx = kAvailableScreenHeights.findIndex(v => v > height) - 1;
   const targetHeight = (scrHeightIdx > -1)
     ? kAvailableScreenHeights[scrHeightIdx]
     : (scrHeightIdx === -1) ? 480 : 1440;
-  
-  const width = docEl.clientWidth;
+
   const wideWidth = targetHeight * 16/9;
-  
+
   canvas.width = (wideWidth > width) ? (targetHeight * 4/3) : wideWidth;
   canvas.height = targetHeight;
 }
