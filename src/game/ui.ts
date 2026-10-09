@@ -559,7 +559,10 @@ export const uiRenderGame = (delta: number) => {
 export const uiRenderMenu = (delta: number) => {
   const width = ctx.canvas.width;
   const height = ctx.canvas.height;
-  const scale = (height > 720) ? 1.5 : 1;
+  const isPortrait = height > width;
+  const scale = isPortrait
+    ? (width > 720) ? 2 : width / 360
+    : (height > 720) ? 1.5 : height / 600;
 
   gTextHue = (gTextHue + delta * 10) % 360;
 
@@ -575,16 +578,36 @@ export const uiRenderMenu = (delta: number) => {
 
   ctx.scale(scale, scale);
 
-  ctxSetGlobalAlpha(0.5);
-  ctxSetFillStyle('#000');
-  ctx.fillRect(-250, -200, 500, 300);
-  ctx.fillRect(-250, 150, 500, 75);
+  ctxSetFillStyle('#00000088');
+  ctx.strokeStyle = `hsl(${gTextHue}, 100%, 60%)`;
+  ctx.lineWidth = 6;
+  if (isPortrait) {
+    ctx.fillRect(-150, -180, 300, 280);
+    ctx.fillRect(-150, 128, 300, 80);
+    ctx.strokeRect(-150, -180, 300, 280);
+    ctx.strokeRect(-150, 128, 300, 80);
 
-  racerRender(
-    Game.mPlayerRacer,
-    ctx,
-    -5, 35, 0, racerAngle, 10, 1
-  );
+    racerRender(
+      Game.mPlayerRacer,
+      ctx,
+      -5, 15, 0, racerAngle,
+      10 * 0.8, 1
+    );
+  } else {
+    ctx.fillRect(-250, -200, 500, 300);
+    ctx.fillRect(-250, 150, 500, 75);
+    ctx.strokeRect(-250, -200, 500, 300);
+    ctx.strokeRect(-250, 150, 500, 75);
+
+    racerRender(
+      Game.mPlayerRacer,
+      ctx,
+      -5, 35, 0, racerAngle,
+      10, 1
+    );
+  }
+
+  ctxSetGlobalAlpha(0.5);
 
   ctx.strokeStyle = '#8888';
   ctx.lineWidth = 1;
@@ -600,36 +623,59 @@ export const uiRenderMenu = (delta: number) => {
 
   ctxFillText(Game.mPlayerRacer.mData[0], 0, 142);
 
-  ctxSetFillStyle((Game.mDifficulty === 0) ? `hsl(${gTextHue}, 100%, 85%)` : '#fff');
-  ctxFillText('Easy', -120, 270);
-  ctxSetFillStyle((Game.mDifficulty === 1) ? `hsl(${gTextHue}, 100%, 85%)` : '#fff');
-  ctxFillText('Normal', 0, 270);
-  ctxSetFillStyle((Game.mDifficulty === 2) ? `hsl(${gTextHue}, 100%, 85%)` : '#fff');
-  ctxFillText('Hard', 120, 270);
-  ctxSetFillStyle('#fff');
+  if (isPortrait) {
+    ctxSetFillStyle((Game.mDifficulty === 0) ? `hsl(${gTextHue}, 100%, 85%)` : '#fff');
+    ctxFillText('Easy', 0, 225);
+    ctxSetFillStyle((Game.mDifficulty === 1) ? `hsl(${gTextHue}, 100%, 85%)` : '#fff');
+    ctxFillText('Normal', 0, 250);
+    ctxSetFillStyle((Game.mDifficulty === 2) ? `hsl(${gTextHue}, 100%, 85%)` : '#fff');
+    ctxFillText('Hard', 0, 275);
+    ctxSetFillStyle('#fff');
+  } else {
+    ctxSetFillStyle((Game.mDifficulty === 0) ? `hsl(${gTextHue}, 100%, 85%)` : '#fff');
+    ctxFillText('Easy', -120, 270);
+    ctxSetFillStyle((Game.mDifficulty === 1) ? `hsl(${gTextHue}, 100%, 85%)` : '#fff');
+    ctxFillText('Normal', 0, 270);
+    ctxSetFillStyle((Game.mDifficulty === 2) ? `hsl(${gTextHue}, 100%, 85%)` : '#fff');
+    ctxFillText('Hard', 120, 270);
+    ctxSetFillStyle('#fff');
+  }
 
-  const translateY = (gSelection === 0) ? 15 : 264;
-
-  ctx.translate(200, translateY);
-  ctxBeginPath();
-  ctxMoveTo(0, -20);
-  ctxLineTo(20, 0);
-  ctxLineTo(0, 20);
-  ctxClosePathAndFill();
-
-  ctx.translate(-400, 0);
-  ctxBeginPath();
-  ctxMoveTo(0, -20);
-  ctxLineTo(-20, 0);
-  ctxLineTo(0, 20);
-  ctxClosePathAndFill();
-
-  ctx.translate(200, -translateY);
-
+  const titleHeightOffset = isPortrait ? -142 : -150;
   uiSetFont(42);
   ctx.strokeStyle = '#888';
-  ctxFillText('Rainbow GP', 0, -150);
-  ctx.strokeText('Rainbow GP', 0, -150);
+  ctxFillText('Rainbow GP', 0, titleHeightOffset);
+  ctx.strokeText('Rainbow GP', 0, titleHeightOffset);
+
+  if (isPortrait) {
+    ctx.translate(110, 15);
+    ctxBeginPath();
+    ctxMoveTo(0, -20);
+    ctxLineTo(20, 0);
+    ctxLineTo(0, 20);
+    ctxClosePathAndFill();
+
+    ctx.translate(-220, 0);
+    ctxBeginPath();
+    ctxMoveTo(0, -20);
+    ctxLineTo(-20, 0);
+    ctxLineTo(0, 20);
+    ctxClosePathAndFill();
+  } else {
+    ctx.translate(200, (gSelection === 0) ? 15 : 264);
+    ctxBeginPath();
+    ctxMoveTo(0, -20);
+    ctxLineTo(20, 0);
+    ctxLineTo(0, 20);
+    ctxClosePathAndFill();
+
+    ctx.translate(-400, 0);
+    ctxBeginPath();
+    ctxMoveTo(0, -20);
+    ctxLineTo(-20, 0);
+    ctxLineTo(0, 20);
+    ctxClosePathAndFill();
+  }
 
   if (gUIControlValue2) {
     gUIControlValue1 += delta;

@@ -3,19 +3,46 @@
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <style>
+      html,
       body {
-        height: 100vh;
+        margin: 0;
+        padding: 0;
         background-color: black;
       }
+      body {
+        min-height: 0;
+      }
       div {
-        position: absolute;
-        top: 0%;
-        left: 50%;
-        transform: translate(-50%, 0%);
+        margin: 0 auto;
+        width: fit-content;
       }
       #c {
-        position: absolute;
-        transform: translate(-50%, 0%);
+        display: block;
+      }
+      @media (orientation: landscape) {
+        body {
+          overflow-x: auto;
+          overflow-y: hidden;
+        }
+
+        .game-root {
+          width: max-content;
+        }
+      }
+      @media (orientation: portrait) {
+        body {
+          overflow-x: hidden;
+          overflow-y: auto;
+        }
+
+        .game-root {
+          width: 100%;
+        }
+
+        #c {
+          width: 100%;
+          height: auto;
+        }
       }
     </style>
     <title>13kjs2026</title>

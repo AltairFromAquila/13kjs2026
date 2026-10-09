@@ -17,10 +17,16 @@ const onResize = () => {
 
   if (isPortraitMobile) {
     const targetWidth = width;
-    const tallHeight = targetWidth * 20/9; 
+    const veryTallHeight = targetWidth * 20/9; 
+    const tallHeight = targetWidth * 16/9; 
 
     canvas.width = targetWidth / dpr;
-    canvas.height = ((tallHeight > height) ? (targetWidth * 16/9) : tallHeight) / dpr;
+    canvas.height = ((veryTallHeight > height)
+      ? (tallHeight > height)
+        ? targetWidth * 4/3
+        : tallHeight
+      : veryTallHeight
+    ) / dpr;
   } else {
     const scrHeightIdx = kAvailableScreenHeights.findIndex(v => v > height) - 1;
     const targetHeight = (scrHeightIdx > -1)
