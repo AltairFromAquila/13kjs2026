@@ -1,11 +1,12 @@
 import { racerData } from "../data/racer.data";
-import { Game, gameGoToFinal, gameGoToMenu, gameGoToTrack, gameStartGame, kGameModeRaceFinalResult, kGameModeRaceIntro, kGameModeRaceResults } from "../game";
+import { Game, gameGoToFinal, gameGoToMenu, gameGoToTrack, gameStartGame, kGameModeRaceFinalResult, kGameModeRaceIntro, kGameModeRaceMenu, kGameModeRaceResults } from "../game";
 import { kMathPi, kMathTau, mathClamp, mathFloor, mathLerp, mathMax, mathMin, mathMod, mathRandom, numberToString, vec2Length } from "../math";
 import { ctx, ctxBeginPath, ctxClosePathAndFill, ctxFillText, ctxGetRainbowGradient, ctxLineTo, ctxMoveTo, ctxSetFillStyle, ctxSetGlobalAlpha, ctxSetTextAlign } from "../sys/context";
-import { kWindowEventKeyDown, windowAddEventListener, windowRemoveEventListener } from "../sys/window";
+import { kWindowEventKeyDown, kWindowEventPointerDown, windowAddEventListener, windowIsMobile, windowRemoveEventListener } from "../sys/window";
 import { racerRender } from "./racer";
 
 type KeyBoardEventListener = (event: KeyboardEvent) => void;
+type PointerEventListener = (event: PointerEvent) => void;
 
 const gResultsTimes = [0, 0, 0, 0, 0, 0, 0, 0];
 
@@ -29,6 +30,31 @@ let gSelection = 0;
 let gRacerSelection = 0;
 
 let gKeyDownCallback: KeyBoardEventListener | 0 = 0;
+let gPointerDownCallback: PointerEventListener | 0 = 0;
+
+const uiStartFromMenu = () => {
+  if (gUIControlValue2) return;
+
+  uiRemovePlayerInput();
+  uiFadeOut();
+
+  gUIControlValue2 = 1;
+};
+
+const uiApplyMenuHorizontalInput = (direction: number) => {
+  if (gSelection) {
+    Game.mDifficulty = mathMod(Game.mDifficulty + direction, 3);
+  } else {
+    gRacerSelection = mathMod(gRacerSelection + direction, 8);
+    Game.mPlayerRacer.mData = racerData[gRacerSelection];
+  }
+};
+
+const uiCircleHit = (x: number, y: number, cx: number, cy: number, radius: number) => {
+  const dx = x - cx;
+  const dy = y - cy;
+  return ((dx * dx) + (dy * dy)) <= (radius * radius);
+};
 
 const uiSetFont = (fontSize: number) => {
   ctx.font = `bold ${fontSize}px Georgia, Verdana, sans-serif`;
@@ -91,40 +117,115 @@ export const uiSetupPlayerInput = () => {
         break;
       case "KeyA":
       case "ArrowLeft":
-        if (gSelection) {
-          Game.mDifficulty = mathMod(Game.mDifficulty - 1, 3);
-        } else {
-          gRacerSelection = mathMod(gRacerSelection - 1, 8);
-          Game.mPlayerRacer.mData = racerData[gRacerSelection];
-        }
+        uiApplyMenuHorizontalInput(-1);
         break;
       case "KeyD":
       case "ArrowRight":
-        if (gSelection) {
-          Game.mDifficulty = mathMod(Game.mDifficulty + 1, 3);
-        } else {
-          gRacerSelection = mathMod(gRacerSelection + 1, 8);
-          Game.mPlayerRacer.mData = racerData[gRacerSelection];
-        }
+        uiApplyMenuHorizontalInput(1);
         break;
       case "KeyK":
         if (!event.repeat) {
-          uiRemovePlayerInput();
-          uiFadeOut();
-
-          gUIControlValue2 = 1;
+          uiStartFromMenu();
         }
         break;
     }
   };
 
+  gPointerDownCallback = (event) => {
+    if (event.button !== 0 || Game.mGameMode !== kGameModeRaceMenu || gUIControlValue2) return;
+
+    const canvas = ctx.canvas;
+    const rect = canvas.getBoundingClientRect();
+    const x = (event.clientX - rect.left) * (canvas.width / rect.width);
+    const y = (event.clientY - rect.top) * (canvas.height / rect.height);
+
+    const width = canvas.width;
+    const height = canvas.height;
+    const isPortrait = height > width;
+    const scale = isPortrait
+      ? (width > 720) ? 2 : width / 360
+      : (height > 720) ? 1.5 : height / 600;
+
+    const menuX = (x - (width / 2)) / scale;
+    const menuY = (y - (height / 2)) / scale;
+    const shiftedY = menuY + 75;
+
+    // On unicorn press
+    if (uiCircleHit(menuX, menuY, -5, isPortrait ? 15 : 35, isPortrait ? 85 : 110)) {
+      if (gSelection) {
+        gSelection = 0;
+      } else {
+        uiStartFromMenu();
+      }
+      return;
+    }
+
+    if (isPortrait) {
+      // On arrow press
+      if (uiCircleHit(menuX, shiftedY, 110, 15, 28)) {
+        uiApplyMenuHorizontalInput(1);
+        return;
+      }
+      if (uiCircleHit(menuX, shiftedY, -110, 15, 28)) {
+        uiApplyMenuHorizontalInput(-1);
+        return;
+      }
+
+      // On difficulty press
+      if (uiCircleHit(menuX, shiftedY, 0, 225, 20)) {
+        Game.mDifficulty = 0;
+        return;
+      }
+      if (uiCircleHit(menuX, shiftedY, 0, 250, 20)) {
+        Game.mDifficulty = 1;
+        return;
+      }
+      if (uiCircleHit(menuX, shiftedY, 0, 275, 20)) {
+        Game.mDifficulty = 2;
+        return;
+      }
+    } else {
+      // On arrow press
+      const arrowY = (gSelection === 0) ? 15 : 264;
+      if (uiCircleHit(menuX, shiftedY, 200, arrowY, 30)) {
+        uiApplyMenuHorizontalInput(1);
+        return;
+      }
+      if (uiCircleHit(menuX, shiftedY, -200, arrowY, 30)) {
+        uiApplyMenuHorizontalInput(-1);
+        return;
+      }
+
+      // On difficulty press
+      if (uiCircleHit(menuX, shiftedY, -120, 270, 26)) {
+        Game.mDifficulty = 0;
+        gSelection = windowIsMobile() ? gSelection : 1;
+        return;
+      }
+      if (uiCircleHit(menuX, shiftedY, 0, 270, 30)) {
+        Game.mDifficulty = 1;
+        gSelection = windowIsMobile() ? gSelection : 1;
+        return;
+      }
+      if (uiCircleHit(menuX, shiftedY, 120, 270, 26)) {
+        Game.mDifficulty = 2;
+        gSelection = windowIsMobile() ? gSelection : 1;
+      }
+    }
+  };
+
   windowAddEventListener(kWindowEventKeyDown, gKeyDownCallback);
+  windowAddEventListener(kWindowEventPointerDown, gPointerDownCallback);
 };
 
 export const uiRemovePlayerInput = () => {
   if (gKeyDownCallback) {
     windowRemoveEventListener(kWindowEventKeyDown, gKeyDownCallback);
     gKeyDownCallback = 0;
+  }
+  if (gPointerDownCallback) {
+    windowRemoveEventListener(kWindowEventPointerDown, gPointerDownCallback);
+    gPointerDownCallback = 0;
   }
 };
 
