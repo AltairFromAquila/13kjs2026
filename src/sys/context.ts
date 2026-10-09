@@ -10,31 +10,28 @@ export const ctx = canvas.getContext('2d', { alpha: false, willReadFrequently: f
 const kAvailableScreenHeights = [480, 720, 900, 1080, 1440]
 const onResize = () => {
   const docEl = doc.documentElement;
-  const height = docEl.clientHeight;
-  const width = docEl.clientWidth;
+  const dpr = window.devicePixelRatio || 1;
+  const height = docEl.clientHeight * dpr;
+  const width = docEl.clientWidth * dpr;
   const isPortraitMobile = windowIsMobile() && height > width;
 
   if (isPortraitMobile) {
-    const scrWidthIdx = kAvailableScreenHeights.findIndex(v => v > width) - 1;
-    const targetWidth = (scrWidthIdx > -1)
-      ? kAvailableScreenHeights[scrWidthIdx]
-      : (scrWidthIdx === -1) ? 480 : 1440;
-    const tallHeight = targetWidth * 16/9;
+    const targetWidth = width;
+    const tallHeight = targetWidth * 20/9; 
 
-    canvas.width = targetWidth;
-    canvas.height = (tallHeight > height) ? (targetWidth * 4/3) : tallHeight;
-    return;
+    canvas.width = targetWidth / dpr;
+    canvas.height = ((tallHeight > height) ? (targetWidth * 16/9) : tallHeight) / dpr;
+  } else {
+    const scrHeightIdx = kAvailableScreenHeights.findIndex(v => v > height) - 1;
+    const targetHeight = (scrHeightIdx > -1)
+      ? kAvailableScreenHeights[scrHeightIdx]
+      : (scrHeightIdx === -1) ? 480 : 1440;
+
+    const wideWidth = targetHeight * 16/9;
+
+    canvas.width = ((wideWidth > width) ? (targetHeight * 4/3) : wideWidth) / dpr;
+    canvas.height = targetHeight / dpr;
   }
-
-  const scrHeightIdx = kAvailableScreenHeights.findIndex(v => v > height) - 1;
-  const targetHeight = (scrHeightIdx > -1)
-    ? kAvailableScreenHeights[scrHeightIdx]
-    : (scrHeightIdx === -1) ? 480 : 1440;
-
-  const wideWidth = targetHeight * 16/9;
-
-  canvas.width = (wideWidth > width) ? (targetHeight * 4/3) : wideWidth;
-  canvas.height = targetHeight;
 }
 
 export const ctxBeginPath = (context: AnyCanvasRenderingContext2D = ctx) => context.beginPath();
