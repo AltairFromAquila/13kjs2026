@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import htmlMinifier from 'vite-plugin-html-minifier'
+import mkcert from 'vite-plugin-mkcert'
 
 export default defineConfig({
   build: {
@@ -31,8 +32,12 @@ export default defineConfig({
     // codeSplitting: false,
   },
   plugins: [
+    mkcert(),
     htmlMinifier({
       minify: true,
     }),
   ],
+  server: {
+    https: true // Activates the secure server
+  }
 });

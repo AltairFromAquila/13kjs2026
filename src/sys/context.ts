@@ -90,3 +90,11 @@ export const ctxGetCanvasImageData = (width: number, height: number, ctx: AnyCan
 
 windowAddEventListener('resize', onResize);
 onResize();
+
+if (windowIsMobile()) {
+  const preventGesture = (event: Event) => event.preventDefault();
+  
+  doc.addEventListener('gesturestart', preventGesture, { passive: false });
+  doc.addEventListener('gesturechange', preventGesture, { passive: false });
+  doc.addEventListener('gestureend', preventGesture, { passive: false });
+}
