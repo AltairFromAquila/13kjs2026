@@ -184,6 +184,7 @@ const gameRandomizeComputerRacersData = () => {
 }
 
 export const gameStartGame = () => {
+  Game.mDifficulty += 2; // First two entries are for rubber banding
   gameRandomizeComputerRacersData();
   Game.mRacers.forEach(racer => {
     racer.mPoints = 0;

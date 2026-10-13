@@ -2,7 +2,7 @@ import { difficultyData } from "../data/difficulty.data";
 import { Game, kGameModeRaceMenu } from "../game";
 import { kMathEpsilon, mathAbs, mathAtan2, mathClamp, mathCos, mathLerpAngle, mathMax, mathMin, mathRandom, mathSin, splineCalculateSegmentPoint, splineCalculateSegmentTangent, vec2Add, vec2Copy, vec2Distance, vec2DistanceSqr, vec2Dot, vec2LengthSqr, vec2Lerp, vec2MulScalar, vec2New, vec2NewCopy, vec2Normalize, vec2Sub, type Vec2 } from "../math";
 import { kWindowEventKeyDown, kWindowEventKeyUp, kWindowEventPointerCancel, kWindowEventPointerDown, kWindowEventPointerMove, kWindowEventPointerUp, windowAddEventListener, windowIsMobile, windowRemoveEventListener } from "../sys/window";
-import type { Racer } from "./racer";
+import { racerGetAIDifficultyIndex, type Racer } from "./racer";
 import { trackGetTrackWidthAt, trackWrapSegmentIndex } from "./track";
 
 type KeyBoardEventListener = (event: KeyboardEvent) => void;
@@ -17,6 +17,7 @@ interface PlayerInputState {
   mMobileSteerValue: number;
   mMobileSteerHoldValue: number;
   mMobileTiltSteerValue: number;
+  mMobileLastTapTime: number;
   mMobileSteerPointerId: number;
   mPointerDownListener: PointerEventListener | 0;
   mPointerMoveListener: PointerEventListener | 0;
@@ -27,7 +28,7 @@ interface PlayerInputState {
 
 export interface Controller {
   mDesiredDirection: Vec2;
-  mGallopTapPressed: boolean;
+  mGallopTapPressed: number;
   mIsGalloping: boolean;
 
   mPreviousSegmentIdx: number;
@@ -60,14 +61,18 @@ const kAIGallopKeepStamina = 0.15;
 const kAIGallopWaitThreshold = 0.6;
 
 const kPlayerGallopTapTimeout = 0.3;
+const kPlayerGallopTapDecayPerTick = windowIsMobile() ? 0.4 : 0.5;
 const kPlayerSteeringCompressionMaxSpeed = 120;
 const kPlayerSteeringMinTurnScale = 0.5;
 const kPlayerMobileSteeringDeadZone = 0.5;
-const kPlayerMobileAutoSteerLookaheadT = 0.05;
+const kPlayerMobileGallopTapRepeatWindowMs = 300;
+const kPlayerMobileAutoSteerLookaheadT = 0.1;
 const kPlayerMobileAutoSteerBlend = 0.66;
+const kPlayerMobileAutoSteerSharpBlend = 0.5;
+const kPlayerMobileAutoSteerSharpTurnDotThreshold = 0.4;
 const kPlayerMobileTiltDeadZoneDeg = 6;
 const kPlayerMobileTiltMaxDeg = 28;
-const kPlayerMobileTiltStrength = 0.6;
+const kPlayerMobileTiltStrength = 0.5;
 
 const kReturnToTrackReCheck = 1.0;
 
@@ -79,6 +84,7 @@ const playerInputState: PlayerInputState = {
   mMobileSteerValue: 0,
   mMobileSteerHoldValue: 0,
   mMobileTiltSteerValue: 0,
+  mMobileLastTapTime: -Infinity,
   mMobileSteerPointerId: -1,
   mPointerDownListener: 0,
   mPointerMoveListener: 0,
@@ -110,13 +116,14 @@ const controllerTriggerGallopTap = (self: Controller) => {
   if (!self || self.mIsWaitingForStamina) return;
 
   self.mIsGalloping = true;
+  self.mGallopTapPressed = 1;
   playerInputState.mPressed.mGallop = true;
   playerInputState.mGallopingTimer = kPlayerGallopTapTimeout;
 };
 
 export const controllerNew = (): Controller => ({
   mDesiredDirection: vec2New(),
-  mGallopTapPressed: false,
+  mGallopTapPressed: 0,
   mIsGalloping: false,
 
   mPreviousSegmentIdx: -1,
@@ -170,6 +177,7 @@ export const controllerReset = (self: Controller) => {
   playerInputState.mMobileSteerValue = 0;
   playerInputState.mMobileSteerHoldValue = 0;
   playerInputState.mMobileTiltSteerValue = 0;
+  playerInputState.mMobileLastTapTime = -Infinity;
   playerInputState.mMobileSteerPointerId = -1;
 }
 
@@ -216,7 +224,7 @@ export const controllerReturnToTrack = (self: Controller, racer: Racer) => {
   }
 
   self.mIsGalloping = false;
-  self.mGallopTapPressed = false;
+  self.mGallopTapPressed = 0;
   self.mIsWaitingForStamina = false;
 };
 
@@ -318,12 +326,20 @@ export const controllerSetupPlayerInput = (self: Controller) => {
 
     requestOrientationPermissionIfNeeded();
 
+    const now = performance.now();
+    const isRepeatTap = (now - playerInputState.mMobileLastTapTime) <= kPlayerMobileGallopTapRepeatWindowMs;
+    playerInputState.mMobileLastTapTime = now;
+
+    if (isRepeatTap) {
+      controllerTriggerGallopTap(self);
+    }
+
+    if (playerInputState.mMobileSteerPointerId !== -1) return;
+
     const steer = controllerMapPointerToSteering(event.clientX);
     playerInputState.mMobileSteerValue = steer;
     playerInputState.mMobileSteerHoldValue = steer;
     playerInputState.mMobileSteerPointerId = event.pointerId;
-
-    controllerTriggerGallopTap(self);
   };
 
   const onPointerMove: PointerEventListener = (event) => {
@@ -423,13 +439,13 @@ export const controllerProcessPlayerInput = (self: Controller, racer: Racer, del
       }
     }
   } else {
-    if (self.mGallopTapPressed) {
-      self.mGallopTapPressed = false;
+    if (self.mGallopTapPressed > 0) {
+      self.mGallopTapPressed = mathMax(0, self.mGallopTapPressed - kPlayerGallopTapDecayPerTick);
     }
 
     if (playerInputState.mPressed.mGallop) {
       playerInputState.mPressed.mGallop = false;
-      self.mGallopTapPressed = true;
+      self.mGallopTapPressed = 1;
     }
 
     if (racer.mStamina <= 0) {
@@ -468,7 +484,7 @@ export const controllerProcessPlayerInput = (self: Controller, racer: Racer, del
     controllerTranslatePlayerDirection(x, y, racer, self.mDesiredDirection);
 
     if (isMobile) {
-      const trackPoint = racer.mTrackPoints[-1];
+      const trackPoint = racer.mTrackPoints[racer.mTrackPoints[-1].mInside ? -1 : racer.mLastValidPathIdx];
 
       if (trackPoint) {
         let targetSegmentIdx = trackPoint.mSegmentIdx;
@@ -480,9 +496,16 @@ export const controllerProcessPlayerInput = (self: Controller, racer: Racer, del
         }
 
         const targetTangent = splineCalculateSegmentTangent(Game.mTrack.mSegments[targetSegmentIdx], targetT, vec2New());
+        const turnAlignment = vec2Dot(trackPoint.mTangent, targetTangent);
+        const useSharpBlend =
+          Game.mDifficulty > 3 ||
+          turnAlignment <= kPlayerMobileAutoSteerSharpTurnDotThreshold;
+        const autoSteerBlend = useSharpBlend
+          ? kPlayerMobileAutoSteerSharpBlend
+          : kPlayerMobileAutoSteerBlend;
         const desiredAngle = mathAtan2(self.mDesiredDirection.y, self.mDesiredDirection.x);
         const targetAngle = mathAtan2(targetTangent.y, targetTangent.x);
-        const correctedAngle = mathLerpAngle(targetAngle, desiredAngle, kPlayerMobileAutoSteerBlend);
+        const correctedAngle = mathLerpAngle(targetAngle, desiredAngle, autoSteerBlend);
 
         self.mDesiredDirection.x = mathCos(correctedAngle);
         self.mDesiredDirection.y = mathSin(correctedAngle);
@@ -494,7 +517,10 @@ export const controllerProcessPlayerInput = (self: Controller, racer: Racer, del
 export const controllerProcessAIForRacer = (self: Controller, racer: Racer, delta: number) => {
   self.mBlockPlayerTimer -= delta;
   self.mReactionTimer -= delta;
-  self.mGallopTapPressed = false;
+  self.mGallopTapPressed = 0;
+
+  const aiDifficultyIdx = racerGetAIDifficultyIndex(racer);
+  const aiDifficulty = difficultyData[aiDifficultyIdx];
 
   if (self.mIsWaitingForStamina && racer.mStamina > kAIGallopWaitThreshold) {
     self.mIsWaitingForStamina = false;
@@ -541,7 +567,7 @@ export const controllerProcessAIForRacer = (self: Controller, racer: Racer, delt
       }
 
       if (self.mIsGalloping) {
-        self.mGallopTapPressed = !wasGalloping || mathRandom() < difficultyData[Game.mDifficulty][3];
+        self.mGallopTapPressed = (!wasGalloping || mathRandom() < aiDifficulty[3]) ? 1 : 0;
       }
     }
 
@@ -567,9 +593,9 @@ export const controllerProcessAIForRacer = (self: Controller, racer: Racer, delt
     if (
       playerDistanceSqr < (isPlayerAhead ? 240 * 240 : 64 * 64) &&
       playerDistanceSqr > (32 * 32) &&
-      mathRandom() < difficultyData[Game.mDifficulty][0]
+      mathRandom() < aiDifficulty[0]
     ) {
-      self.mIsBlockingPlayer = mathRandom() < difficultyData[Game.mDifficulty][0];
+      self.mIsBlockingPlayer = mathRandom() < aiDifficulty[0];
     }
 
     self.mBlockPlayerTimer = 1 + (mathRandom() * 4);
