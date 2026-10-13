@@ -232,7 +232,11 @@ export const uiRemovePlayerInput = () => {
 export const uiRenderGame = (delta: number) => {
   const width = ctx.canvas.width;
   const height = ctx.canvas.height;
-  const scale = (height > 720) ? 1.5 : 1;
+  const isPortrait = height > width;
+  const scale = isPortrait
+    ? (width > 720) ? 2 : width / 320
+    : (height > 720) ? 1.5 : height / 600;
+
   const playerRacer = Game.mPlayerRacer;
 
   const drawTimeElement = (
@@ -267,30 +271,55 @@ export const uiRenderGame = (delta: number) => {
     const remainingSeconds = seconds % 60;
 
     ctxSetFillStyle(color);
-    ctxSetTextAlign('right');
-    ctxFillText(`${index + 1}`, -165, y);
-    drawTimeElement(
-      numberToString(milliseconds, 3),
-      numberToString(remainingSeconds, 2) + '.',
-      numberToString(minutes, 2) + ':',
-      139, 138, 96, y
-    )
-    ctxSetTextAlign('left');
-    ctxFillText(name, -150, y);
+    if (isPortrait) {
+      ctxSetTextAlign('right');
+      ctxFillText(`${index + 1}`, -125, y);
+      drawTimeElement(
+        numberToString(milliseconds, 3),
+        numberToString(remainingSeconds, 2) + '.',
+        numberToString(minutes, 2) + ':',
+        94, 93, 51, y
+      )
+      ctxSetTextAlign('left');
+      ctxFillText(name, -110, y);
+    } else {
+      ctxSetTextAlign('right');
+      ctxFillText(`${index + 1}`, -165, y);
+      drawTimeElement(
+        numberToString(milliseconds, 3),
+        numberToString(remainingSeconds, 2) + '.',
+        numberToString(minutes, 2) + ':',
+        139, 138, 96, y
+      )
+      ctxSetTextAlign('left');
+      ctxFillText(name, -150, y);
+    }
   }
   const drawStandingsEntry = (index: number, name: string, points: number, color: string) => {
     const y = 90 + (index * 35);
 
     ctxSetFillStyle(color);
-    ctxSetTextAlign('right');
-    ctxFillText(`${index + 1}`, -165, y);
-    ctxFillText(`${points} pts.`, 180, y);
-    ctxSetTextAlign('left');
-    ctxFillText(name, -150, y);
+    if (isPortrait) {
+      ctxSetTextAlign('right');
+      ctxFillText(`${index + 1}`, -125, y);
+      ctxFillText(`${points} pts.`, 140, y);
+      ctxSetTextAlign('left');
+      ctxFillText(name, -110, y);
+    } else {
+      ctxSetTextAlign('right');
+      ctxFillText(`${index + 1}`, -165, y);
+      ctxFillText(`${points} pts.`, 180, y);
+      ctxSetTextAlign('left');
+      ctxFillText(name, -150, y);
+    }
   }
   const drawResultPanel = (alphaFactor: number, title: string) => {
     ctxSetGlobalAlpha(0.5 * alphaFactor);
-    ctx.fillRect(-210, 0, 420, 360);
+    if (isPortrait) {
+      ctx.fillRect(-150, 0, 300, 360);
+    } else {
+      ctx.fillRect(-210, 0, 420, 360);
+    }
     ctxSetGlobalAlpha(alphaFactor);
 
     uiSetFont(32);
@@ -341,7 +370,7 @@ export const uiRenderGame = (delta: number) => {
       }
       
       drawResultPanel(alphaFactor, 'Race Results');
-      uiSetFont(24);
+      uiSetFont(isPortrait ? 22 : 24);
       Game.mRacersOrdered.forEach(
         (r, i) => drawTimeResultEntry(
           i, r.mData[0], gResultsTimes[i], (r === playerRacer) ? `hsl(${gTextHue}, 100%, 85%)` : '#fff'
@@ -361,7 +390,7 @@ export const uiRenderGame = (delta: number) => {
       }
 
       drawResultPanel(alphaFactor, 'Standings');
-      uiSetFont(24);
+      uiSetFont(isPortrait ? 22 : 24);
       Game.mRacersStandings.forEach(
         (r, i) => drawStandingsEntry(
           i, r.mData[0], r.mPoints, (r === playerRacer) ? `hsl(${gTextHue}, 100%, 85%)` : '#fff'
@@ -400,24 +429,40 @@ export const uiRenderGame = (delta: number) => {
       ctxSetGlobalAlpha(mathLerp(0, 1, mathClamp(gUIControlValue1, 0, 1)));
 
       if (playerPosition < 4) {
-        uiSetFont(64);
+        uiSetFont(isPortrait ? 32 : 64);
         ctxSetFillStyle(`hsl(${gTextHue}, 100%, 85%)`);
         ctxFillText('Congratulations!', 0, 70);
 
-        uiSetFont(32);
+        uiSetFont(isPortrait ? 22 : 32);
         ctxSetFillStyle('#fff');
         if (playerPosition < 2) {
-          ctxFillText("Oh yeah! You've got the first place!", 0, 120);
+          if (isPortrait) {
+            ctxFillText('Oh yeah!', 0, 100);
+            ctxFillText("You've got the first place!", 0, 120);
+          } else {
+            ctxFillText("Oh yeah! You've got the first place!", 0, 120);
+          }
         } else {
-          ctxFillText(
-            `You've finished ${(playerPosition < 3) ? '2nd' : '3rd'}! Well done!`,
-            0, 120
-          );
+          if (isPortrait) {
+            ctxFillText(`You've finished ${(playerPosition < 3) ? '2nd' : '3rd'}!`, 0, 100);
+            ctxFillText('Well done!', 0, 120);
+          } else {
+            ctxFillText(
+              `You've finished ${(playerPosition < 3) ? '2nd' : '3rd'}! Well done!`,
+              0, 120
+            );
+          }
         }
       } else {
-        uiSetFont(32);
         ctxSetFillStyle('#fff');
-        ctxFillText(`You finished ${playerPosition}th. Better luck next time!`, 0, 120);
+        if (isPortrait) {
+          uiSetFont(22);
+          ctxFillText(`You finished ${playerPosition}th`, 0, 100);
+          ctxFillText('Better luck next time!', 0, 120);
+        } else {
+          uiSetFont(32);
+          ctxFillText(`You finished ${playerPosition}th. Better luck next time!`, 0, 120);
+        }
       }
 
       ctxSetGlobalAlpha(1);
@@ -510,13 +555,15 @@ export const uiRenderGame = (delta: number) => {
         }
       }
 
+      const portraitOffset = isPortrait ? 32 : 0;
+
       uiSetFont(8);
       ctxSetFillStyle('#fff');
-      ctxFillText('GAP', 0, 0);
+      ctxFillText('GAP', 0, 0 + portraitOffset);
 
       uiSetFont(18);
       ctxSetFillStyle(gGapTimeColor);
-      ctxFillText(gGapTimeText, -3, 20);
+      ctxFillText(gGapTimeText, -3, 20 + portraitOffset);
     }
 
     ctx.resetTransform();
@@ -527,7 +574,11 @@ export const uiRenderGame = (delta: number) => {
     ctxSetFillStyle('#fff');
 
     ctxFillText('POSITION', 20, 20);
-    ctxFillText('LAP', 120, 20);
+    if (isPortrait) {
+      ctxFillText('LAP', 20, 96);
+    } else {
+      ctxFillText('LAP', 120, 20);
+    }
 
     let playerPosColor: string;
     let playerPosSufix: string;
@@ -558,8 +609,13 @@ export const uiRenderGame = (delta: number) => {
     uiSetFont(18);
     ctxSetFillStyle('#fff');
     ctxFillText('/ 8', 64, 68);
-    ctxFillText(`${mathMin(playerRacer.mLap, 3) || 1}`, 120, 42);
-    ctxFillText('/ 3', 136, 42);
+    if (isPortrait) {
+      ctxFillText(`${mathMin(playerRacer.mLap, 3) || 1}`, 20, 118);
+      ctxFillText('/ 3', 36, 118);
+    } else {
+      ctxFillText(`${mathMin(playerRacer.mLap, 3) || 1}`, 120, 42);
+      ctxFillText('/ 3', 136, 42);
+    }
 
     uiSetFont(12);
     ctxSetTextAlign('right');
