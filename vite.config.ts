@@ -17,6 +17,10 @@ export default defineConfig({
       nameCache: {},
       ecma: 2025,
       module: true,
+      format: {
+        comments: false,
+        beautify: false,
+      },
       compress: {
         booleans_as_integers: true,
         passes: 5,
@@ -31,13 +35,25 @@ export default defineConfig({
     // In Vite 8/Rolldown, this replaces inlineDynamicImports for single-chunk output.
     // codeSplitting: false,
   },
+  worker: {
+    format: 'es',
+    rolldownOptions: {
+      output: {
+        minify: true
+      }
+    }
+  },
   plugins: [
     mkcert(),
     htmlMinifier({
       minify: true,
-    }),
+    })
   ],
   server: {
+    headers: {
+      "Cross-Origin-Embedder-Policy": "require-corp",
+      "Cross-Origin-Opener-Policy": "same-origin",
+    },
     https: true // Activates the secure server
   }
 });

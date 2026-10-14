@@ -21,6 +21,7 @@ export const windowRemoveEventListener = <K extends keyof WindowEventMap>(
   window.removeEventListener(type, listener, options);
 };
 
+export const isCrossOriginIsolated = self.crossOriginIsolated;
 export const windowIsMobile = () => {
   // Prefer the modern high-entropy hint when available.
   const mobileHint = (navigator as Navigator & { userAgentData?: { mobile?: boolean } }).userAgentData?.mobile;
