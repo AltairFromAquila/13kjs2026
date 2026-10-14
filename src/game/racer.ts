@@ -167,6 +167,36 @@ export const racerSetAngle = (self: Racer, angle: number) => {
 
 export const racerSetAngleFromVector = (self: Racer, vec: Vec2) => racerSetAngle(self, mathAtan2(vec.y, vec.x));
 
+export const racerGetAIDifficultyIndex = (self: Racer) => {
+  const currentDifficulty = Game.mDifficulty;
+  if (self === Game.mPlayerRacer) return currentDifficulty;
+
+  const segmentCount = Game.mTrack.mSegments.length;
+  if (segmentCount <= 0) return currentDifficulty;
+
+  const aiTrackPoint = self.mTrackPoints[-1];
+  const playerTrackPoint = Game.mPlayerRacer.mTrackPoints[-1];
+  if (!aiTrackPoint || !playerTrackPoint) return currentDifficulty;
+
+  const lapDelta = self.mLapTracker - Game.mPlayerRacer.mLapTracker;
+  
+  // Positive means AI is ahead. Zero/negative keeps the current difficulty.
+  const aheadSegments =
+    (lapDelta * segmentCount) +
+    (aiTrackPoint.mSegmentIdx - playerTrackPoint.mSegmentIdx) +
+    (aiTrackPoint.t - playerTrackPoint.t);
+
+  if (aheadSegments <= 0) {
+    return currentDifficulty;
+  }
+
+  if (aheadSegments <= (segmentCount * 0.5)) {
+    return mathMax(0, currentDifficulty - 1);
+  }
+
+  return mathMax(0, currentDifficulty - 2);
+};
+
 export const racerFixedTick = (self: Racer, delta: number) => {
   self.mController.mProcessFunction(self.mController, self, delta);
 
@@ -181,7 +211,9 @@ export const racerFixedTick = (self: Racer, delta: number) => {
   const maxJogSpeedSqr = kRacerMaxJogSpeed * kRacerMaxJogSpeed;
 
   if (self.mController.mIsGalloping) {
-    const staminaDrainRateMaxValue = controllerIsPlayerControlled(self.mController) ? 0.1 : difficultyData[Game.mDifficulty][1];
+    const staminaDrainRateMaxValue = controllerIsPlayerControlled(self.mController)
+      ? 0.1
+      : difficultyData[racerGetAIDifficultyIndex(self)][1];
     const staminaDrainRate = mathLerp(0, staminaDrainRateMaxValue, mathMin(speedSqr / maxJogSpeedSqr, 1));
     self.mStamina -= delta * staminaDrainRate; // Decrease stamina continuously while galloping
 
@@ -189,7 +221,9 @@ export const racerFixedTick = (self: Racer, delta: number) => {
       self.mStamina = 0;
     }
   } else if (self.mStamina < 1) {
-    const staminaRegenRateMaxValue = controllerIsPlayerControlled(self.mController) ? 0.2 : difficultyData[Game.mDifficulty][2];
+    const staminaRegenRateMaxValue = controllerIsPlayerControlled(self.mController)
+      ? 0.2
+      : difficultyData[racerGetAIDifficultyIndex(self)][2];
     self.mStamina += delta * staminaRegenRateMaxValue; // Regenerate stamina while not galloping
     if (self.mStamina > 1) {
       self.mStamina = 1;
