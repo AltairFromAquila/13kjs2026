@@ -2,6 +2,7 @@ import { kVerticalFov, type Camera } from "../core/camera";
 import { easeOutQuad } from "../easing";
 import { Game, kGameModeRaceFinalResult, kGameModeRaceIntro, kGameModeRaceResults } from "../game";
 import { mathJs, mathSin, mathCos, type Vec2, kMathTau, mathMod, vec2New, kMathHalfPi, mathLerp, mathLerpAngle, mathMax, mathMin, mathClamp } from "../math";
+import { ctx } from "../sys/context";
 import { kTrackTextureSize } from "./track";
 
 export interface GameCamera extends Camera {
@@ -45,10 +46,16 @@ export const cameraGameCamNew = (): GameCamera => ({
 });
 
 export const cameraGameCamSetupIntro = (self: GameCamera) => {
+  const width = ctx.canvas.width;
+  const height = ctx.canvas.height;
+  const isPortrait = height > width;
+  
   self.mAngle = 0;
   self.mAngleOffset = 0;
   self.mPitch = kMathHalfPi;
-  self.mHeight = 3000;
+  self.mHeight = isPortrait
+    ? (Game.mCurrentTrack > 4) ? 5100 : 4200
+    : 3000;
 
   // self.mPos.x = self.mPos.y = kTrackTextureSize / 2;
   const trackCenter = kTrackTextureSize / 2;
@@ -59,10 +66,18 @@ export const cameraGameCamSetupIntro = (self: GameCamera) => {
 export const cameraGameCamTick = (self: GameCamera, delta: number) => {
   if (Game.mGameMode === kGameModeRaceIntro) {
     if (Game.mSequenceTimer > 4) {
+      const width = ctx.canvas.width;
+      const height = ctx.canvas.height;
+      const isPortrait = height > width;
       const ratio = easeOutQuad(mathMin(Game.mSequenceTimer - 4, 1));
 
       self.mPitch = mathLerp(kMathHalfPi, 0.4, ratio);
-      self.mHeight = mathLerp(3000, 32, ratio);
+      self.mHeight = mathLerp(
+        isPortrait
+          ? (Game.mCurrentTrack > 4) ? 5100 : 4200
+          : 3000,
+        32,
+        ratio);
     } else if (Game.mSequenceTimer > 3) {
       const ratio = mathMin(Game.mSequenceTimer - 3, 1);
 

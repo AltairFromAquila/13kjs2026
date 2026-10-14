@@ -1,5 +1,5 @@
 import { racerData } from "../data/racer.data";
-import { Game, gameGoToFinal, gameGoToMenu, gameGoToTrack, gameStartGame, kGameModeRaceFinalResult, kGameModeRaceIntro, kGameModeRaceMenu, kGameModeRaceResults } from "../game";
+import { Game, gameGoToFinal, gameGoToMenu, gameGoToTrack, gameStartGame, kGameModeRaceFinalResult, kGameModeRaceIntro, kGameModeRaceMenu, kGameModeRaceRacing, kGameModeRaceResults } from "../game";
 import { kMathPi, kMathTau, mathClamp, mathFloor, mathLerp, mathMax, mathMin, mathMod, mathRandom, numberToString, vec2Length } from "../math";
 import { ctx, ctxBeginPath, ctxClosePathAndFill, ctxFillText, ctxGetRainbowGradient, ctxLineTo, ctxMoveTo, ctxSetFillStyle, ctxSetGlobalAlpha, ctxSetTextAlign } from "../sys/context";
 import { kWindowEventKeyDown, kWindowEventPointerDown, windowAddEventListener, windowIsMobile, windowRemoveEventListener } from "../sys/window";
@@ -235,7 +235,7 @@ export const uiRenderGame = (delta: number) => {
   const isPortrait = height > width;
   const scale = isPortrait
     ? (width > 720) ? 2 : width / 320
-    : (height > 720) ? 1.5 : height / 600;
+    : (height > 720) ? 1.5 : height / ((Game.mGameMode <= kGameModeRaceRacing) ? 420 : 600);
 
   const playerRacer = Game.mPlayerRacer;
 
@@ -497,7 +497,7 @@ export const uiRenderGame = (delta: number) => {
         ctxSetGlobalAlpha(((gUIControlValue1 % 0.2) > 0.1) ? 0 : 1);
         uiSetFont(32);
         ctxSetFillStyle('#fff');
-        ctxFillText('Final Lap!', 0, 60);
+        ctxFillText('Final Lap!', 0, isPortrait ? 92 : 60);
 
         ctxSetGlobalAlpha(1);
       } else if (gUIControlValue1 < 1 && gUIControlValue2 === 0) {
