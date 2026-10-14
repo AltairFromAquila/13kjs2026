@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
-import htmlMinifier from 'vite-plugin-html-minifier';
+import htmlMinifier from 'vite-plugin-html-minifier'
+import mkcert from 'vite-plugin-mkcert'
 
 export default defineConfig({
   build: {
@@ -43,6 +44,7 @@ export default defineConfig({
     }
   },
   plugins: [
+    mkcert(),
     htmlMinifier({
       minify: true,
     })
@@ -52,5 +54,6 @@ export default defineConfig({
       "Cross-Origin-Embedder-Policy": "require-corp",
       "Cross-Origin-Opener-Policy": "same-origin",
     },
-  },
+    https: true // Activates the secure server
+  }
 });

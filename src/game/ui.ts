@@ -1,11 +1,12 @@
 import { racerData } from "../data/racer.data";
-import { Game, gameGoToFinal, gameGoToMenu, gameGoToTrack, gameStartGame, kGameModeRaceFinalResult, kGameModeRaceIntro, kGameModeRaceResults } from "../game";
+import { Game, gameGoToFinal, gameGoToMenu, gameGoToTrack, gameStartGame, kGameModeRaceFinalResult, kGameModeRaceIntro, kGameModeRaceMenu, kGameModeRaceRacing, kGameModeRaceResults } from "../game";
 import { kMathPi, kMathTau, mathClamp, mathFloor, mathLerp, mathMax, mathMin, mathMod, mathRandom, numberToString, vec2Length } from "../math";
 import { ctx, ctxBeginPath, ctxClosePathAndFill, ctxFillText, ctxGetRainbowGradient, ctxLineTo, ctxMoveTo, ctxSetFillStyle, ctxSetGlobalAlpha, ctxSetTextAlign } from "../sys/context";
-import { kWindowEventKeyDown, windowAddEventListener, windowRemoveEventListener } from "../sys/window";
+import { kWindowEventKeyDown, kWindowEventPointerDown, windowAddEventListener, windowIsMobile, windowRemoveEventListener } from "../sys/window";
 import { racerRender } from "./racer";
 
 type KeyBoardEventListener = (event: KeyboardEvent) => void;
+type PointerEventListener = (event: PointerEvent) => void;
 
 const gResultsTimes = [0, 0, 0, 0, 0, 0, 0, 0];
 
@@ -29,6 +30,31 @@ let gSelection = 0;
 let gRacerSelection = 0;
 
 let gKeyDownCallback: KeyBoardEventListener | 0 = 0;
+let gPointerDownCallback: PointerEventListener | 0 = 0;
+
+const uiStartFromMenu = () => {
+  if (gUIControlValue2) return;
+
+  uiRemovePlayerInput();
+  uiFadeOut();
+
+  gUIControlValue2 = 1;
+};
+
+const uiApplyMenuHorizontalInput = (direction: number) => {
+  if (gSelection) {
+    Game.mDifficulty = mathMod(Game.mDifficulty + direction, 3);
+  } else {
+    gRacerSelection = mathMod(gRacerSelection + direction, 8);
+    Game.mPlayerRacer.mData = racerData[gRacerSelection];
+  }
+};
+
+const uiCircleHit = (x: number, y: number, cx: number, cy: number, radius: number) => {
+  const dx = x - cx;
+  const dy = y - cy;
+  return ((dx * dx) + (dy * dy)) <= (radius * radius);
+};
 
 const uiSetFont = (fontSize: number) => {
   ctx.font = `bold ${fontSize}px Georgia, Verdana, sans-serif`;
@@ -91,34 +117,105 @@ export const uiSetupPlayerInput = () => {
         break;
       case "KeyA":
       case "ArrowLeft":
-        if (gSelection) {
-          Game.mDifficulty = mathMod(Game.mDifficulty - 1, 3);
-        } else {
-          gRacerSelection = mathMod(gRacerSelection - 1, 8);
-          Game.mPlayerRacer.mData = racerData[gRacerSelection];
-        }
+        uiApplyMenuHorizontalInput(-1);
         break;
       case "KeyD":
       case "ArrowRight":
-        if (gSelection) {
-          Game.mDifficulty = mathMod(Game.mDifficulty + 1, 3);
-        } else {
-          gRacerSelection = mathMod(gRacerSelection + 1, 8);
-          Game.mPlayerRacer.mData = racerData[gRacerSelection];
-        }
+        uiApplyMenuHorizontalInput(1);
         break;
       case "KeyK":
         if (!event.repeat) {
-          uiRemovePlayerInput();
-          uiFadeOut();
-
-          gUIControlValue2 = 1;
+          uiStartFromMenu();
         }
         break;
     }
   };
 
+  gPointerDownCallback = (event) => {
+    if (event.button !== 0 || Game.mGameMode !== kGameModeRaceMenu || gUIControlValue2) return;
+
+    const canvas = ctx.canvas;
+    const rect = canvas.getBoundingClientRect();
+    const x = (event.clientX - rect.left) * (canvas.width / rect.width);
+    const y = (event.clientY - rect.top) * (canvas.height / rect.height);
+
+    const width = canvas.width;
+    const height = canvas.height;
+    const isPortrait = height > width;
+    const scale = isPortrait
+      ? (width > 720) ? 2 : width / 360
+      : (height > 720) ? 1.5 : height / 600;
+
+    const menuX = (x - (width / 2)) / scale;
+    const menuY = (y - (height / 2)) / scale;
+    const shiftedY = menuY + 75;
+
+    // On unicorn press
+    if (uiCircleHit(menuX, menuY, -5, isPortrait ? 15 : 35, isPortrait ? 85 : 110)) {
+      if (gSelection) {
+        gSelection = 0;
+      } else {
+        uiStartFromMenu();
+      }
+      return;
+    }
+
+    if (isPortrait) {
+      // On arrow press
+      if (uiCircleHit(menuX, shiftedY, 110, 15, 28)) {
+        uiApplyMenuHorizontalInput(1);
+        return;
+      }
+      if (uiCircleHit(menuX, shiftedY, -110, 15, 28)) {
+        uiApplyMenuHorizontalInput(-1);
+        return;
+      }
+
+      // On difficulty press
+      if (uiCircleHit(menuX, shiftedY, 0, 225, 20)) {
+        Game.mDifficulty = 0;
+        return;
+      }
+      if (uiCircleHit(menuX, shiftedY, 0, 250, 20)) {
+        Game.mDifficulty = 1;
+        return;
+      }
+      if (uiCircleHit(menuX, shiftedY, 0, 275, 20)) {
+        Game.mDifficulty = 2;
+        return;
+      }
+    } else {
+      // On arrow press
+      const arrowY = (gSelection === 0) ? 15 : 264;
+      if (uiCircleHit(menuX, shiftedY, 200, arrowY, 30)) {
+        uiApplyMenuHorizontalInput(1);
+        return;
+      }
+      if (uiCircleHit(menuX, shiftedY, -200, arrowY, 30)) {
+        uiApplyMenuHorizontalInput(-1);
+        return;
+      }
+
+      // On difficulty press
+      if (uiCircleHit(menuX, shiftedY, -120, 270, 26)) {
+        Game.mDifficulty = 0;
+        gSelection = windowIsMobile() ? gSelection : 1;
+        return;
+      }
+      if (uiCircleHit(menuX, shiftedY, 0, 270, 30)) {
+        Game.mDifficulty = 1;
+        gSelection = windowIsMobile() ? gSelection : 1;
+        return;
+      }
+      if (uiCircleHit(menuX, shiftedY, 120, 270, 26)) {
+        Game.mDifficulty = 2;
+        gSelection = windowIsMobile() ? gSelection : 1;
+      }
+    }
+  };
+
   windowAddEventListener(kWindowEventKeyDown, gKeyDownCallback);
+  windowAddEventListener(kWindowEventPointerDown, gPointerDownCallback);
 };
 
 export const uiRemovePlayerInput = () => {
@@ -126,12 +223,20 @@ export const uiRemovePlayerInput = () => {
     windowRemoveEventListener(kWindowEventKeyDown, gKeyDownCallback);
     gKeyDownCallback = 0;
   }
+  if (gPointerDownCallback) {
+    windowRemoveEventListener(kWindowEventPointerDown, gPointerDownCallback);
+    gPointerDownCallback = 0;
+  }
 };
 
 export const uiRenderGame = (delta: number) => {
   const width = ctx.canvas.width;
   const height = ctx.canvas.height;
-  const scale = (height > 720) ? 1.5 : 1;
+  const isPortrait = height > width;
+  const scale = isPortrait
+    ? (width > 720) ? 2 : width / 320
+    : (height > 720) ? 1.5 : height / ((Game.mGameMode <= kGameModeRaceRacing) ? 420 : 600);
+
   const playerRacer = Game.mPlayerRacer;
 
   const drawTimeElement = (
@@ -166,30 +271,55 @@ export const uiRenderGame = (delta: number) => {
     const remainingSeconds = seconds % 60;
 
     ctxSetFillStyle(color);
-    ctxSetTextAlign('right');
-    ctxFillText(`${index + 1}`, -165, y);
-    drawTimeElement(
-      numberToString(milliseconds, 3),
-      numberToString(remainingSeconds, 2) + '.',
-      numberToString(minutes, 2) + ':',
-      139, 138, 96, y
-    )
-    ctxSetTextAlign('left');
-    ctxFillText(name, -150, y);
+    if (isPortrait) {
+      ctxSetTextAlign('right');
+      ctxFillText(`${index + 1}`, -125, y);
+      drawTimeElement(
+        numberToString(milliseconds, 3),
+        numberToString(remainingSeconds, 2) + '.',
+        numberToString(minutes, 2) + ':',
+        94, 93, 51, y
+      )
+      ctxSetTextAlign('left');
+      ctxFillText(name, -110, y);
+    } else {
+      ctxSetTextAlign('right');
+      ctxFillText(`${index + 1}`, -165, y);
+      drawTimeElement(
+        numberToString(milliseconds, 3),
+        numberToString(remainingSeconds, 2) + '.',
+        numberToString(minutes, 2) + ':',
+        139, 138, 96, y
+      )
+      ctxSetTextAlign('left');
+      ctxFillText(name, -150, y);
+    }
   }
   const drawStandingsEntry = (index: number, name: string, points: number, color: string) => {
     const y = 90 + (index * 35);
 
     ctxSetFillStyle(color);
-    ctxSetTextAlign('right');
-    ctxFillText(`${index + 1}`, -165, y);
-    ctxFillText(`${points} pts.`, 180, y);
-    ctxSetTextAlign('left');
-    ctxFillText(name, -150, y);
+    if (isPortrait) {
+      ctxSetTextAlign('right');
+      ctxFillText(`${index + 1}`, -125, y);
+      ctxFillText(`${points} pts.`, 140, y);
+      ctxSetTextAlign('left');
+      ctxFillText(name, -110, y);
+    } else {
+      ctxSetTextAlign('right');
+      ctxFillText(`${index + 1}`, -165, y);
+      ctxFillText(`${points} pts.`, 180, y);
+      ctxSetTextAlign('left');
+      ctxFillText(name, -150, y);
+    }
   }
   const drawResultPanel = (alphaFactor: number, title: string) => {
     ctxSetGlobalAlpha(0.5 * alphaFactor);
-    ctx.fillRect(-210, 0, 420, 360);
+    if (isPortrait) {
+      ctx.fillRect(-150, 0, 300, 360);
+    } else {
+      ctx.fillRect(-210, 0, 420, 360);
+    }
     ctxSetGlobalAlpha(alphaFactor);
 
     uiSetFont(32);
@@ -240,7 +370,7 @@ export const uiRenderGame = (delta: number) => {
       }
       
       drawResultPanel(alphaFactor, 'Race Results');
-      uiSetFont(24);
+      uiSetFont(isPortrait ? 22 : 24);
       Game.mRacersOrdered.forEach(
         (r, i) => drawTimeResultEntry(
           i, r.mData[0], gResultsTimes[i], (r === playerRacer) ? `hsl(${gTextHue}, 100%, 85%)` : '#fff'
@@ -260,7 +390,7 @@ export const uiRenderGame = (delta: number) => {
       }
 
       drawResultPanel(alphaFactor, 'Standings');
-      uiSetFont(24);
+      uiSetFont(isPortrait ? 22 : 24);
       Game.mRacersStandings.forEach(
         (r, i) => drawStandingsEntry(
           i, r.mData[0], r.mPoints, (r === playerRacer) ? `hsl(${gTextHue}, 100%, 85%)` : '#fff'
@@ -299,24 +429,40 @@ export const uiRenderGame = (delta: number) => {
       ctxSetGlobalAlpha(mathLerp(0, 1, mathClamp(gUIControlValue1, 0, 1)));
 
       if (playerPosition < 4) {
-        uiSetFont(64);
+        uiSetFont(isPortrait ? 32 : 64);
         ctxSetFillStyle(`hsl(${gTextHue}, 100%, 85%)`);
         ctxFillText('Congratulations!', 0, 70);
 
-        uiSetFont(32);
+        uiSetFont(isPortrait ? 22 : 32);
         ctxSetFillStyle('#fff');
         if (playerPosition < 2) {
-          ctxFillText("Oh yeah! You've got the first place!", 0, 120);
+          if (isPortrait) {
+            ctxFillText('Oh yeah!', 0, 100);
+            ctxFillText("You've got the first place!", 0, 120);
+          } else {
+            ctxFillText("Oh yeah! You've got the first place!", 0, 120);
+          }
         } else {
-          ctxFillText(
-            `You've finished ${(playerPosition < 3) ? '2nd' : '3rd'}! Well done!`,
-            0, 120
-          );
+          if (isPortrait) {
+            ctxFillText(`You've finished ${(playerPosition < 3) ? '2nd' : '3rd'}!`, 0, 100);
+            ctxFillText('Well done!', 0, 120);
+          } else {
+            ctxFillText(
+              `You've finished ${(playerPosition < 3) ? '2nd' : '3rd'}! Well done!`,
+              0, 120
+            );
+          }
         }
       } else {
-        uiSetFont(32);
         ctxSetFillStyle('#fff');
-        ctxFillText(`You finished ${playerPosition}th. Better luck next time!`, 0, 120);
+        if (isPortrait) {
+          uiSetFont(22);
+          ctxFillText(`You finished ${playerPosition}th`, 0, 100);
+          ctxFillText('Better luck next time!', 0, 120);
+        } else {
+          uiSetFont(32);
+          ctxFillText(`You finished ${playerPosition}th. Better luck next time!`, 0, 120);
+        }
       }
 
       ctxSetGlobalAlpha(1);
@@ -351,7 +497,7 @@ export const uiRenderGame = (delta: number) => {
         ctxSetGlobalAlpha(((gUIControlValue1 % 0.2) > 0.1) ? 0 : 1);
         uiSetFont(32);
         ctxSetFillStyle('#fff');
-        ctxFillText('Final Lap!', 0, 60);
+        ctxFillText('Final Lap!', 0, isPortrait ? 92 : 60);
 
         ctxSetGlobalAlpha(1);
       } else if (gUIControlValue1 < 1 && gUIControlValue2 === 0) {
@@ -409,13 +555,15 @@ export const uiRenderGame = (delta: number) => {
         }
       }
 
+      const portraitOffset = isPortrait ? 32 : 0;
+
       uiSetFont(8);
       ctxSetFillStyle('#fff');
-      ctxFillText('GAP', 0, 0);
+      ctxFillText('GAP', 0, 0 + portraitOffset);
 
       uiSetFont(18);
       ctxSetFillStyle(gGapTimeColor);
-      ctxFillText(gGapTimeText, -3, 20);
+      ctxFillText(gGapTimeText, -3, 20 + portraitOffset);
     }
 
     ctx.resetTransform();
@@ -426,7 +574,11 @@ export const uiRenderGame = (delta: number) => {
     ctxSetFillStyle('#fff');
 
     ctxFillText('POSITION', 20, 20);
-    ctxFillText('LAP', 120, 20);
+    if (isPortrait) {
+      ctxFillText('LAP', 20, 96);
+    } else {
+      ctxFillText('LAP', 120, 20);
+    }
 
     let playerPosColor: string;
     let playerPosSufix: string;
@@ -457,8 +609,13 @@ export const uiRenderGame = (delta: number) => {
     uiSetFont(18);
     ctxSetFillStyle('#fff');
     ctxFillText('/ 8', 64, 68);
-    ctxFillText(`${mathMin(playerRacer.mLap, 3) || 1}`, 120, 42);
-    ctxFillText('/ 3', 136, 42);
+    if (isPortrait) {
+      ctxFillText(`${mathMin(playerRacer.mLap, 3) || 1}`, 20, 118);
+      ctxFillText('/ 3', 36, 118);
+    } else {
+      ctxFillText(`${mathMin(playerRacer.mLap, 3) || 1}`, 120, 42);
+      ctxFillText('/ 3', 136, 42);
+    }
 
     uiSetFont(12);
     ctxSetTextAlign('right');
@@ -559,7 +716,10 @@ export const uiRenderGame = (delta: number) => {
 export const uiRenderMenu = (delta: number) => {
   const width = ctx.canvas.width;
   const height = ctx.canvas.height;
-  const scale = (height > 720) ? 1.5 : 1;
+  const isPortrait = height > width;
+  const scale = isPortrait
+    ? (width > 720) ? 2 : width / 360
+    : (height > 720) ? 1.5 : height / 600;
 
   gTextHue = (gTextHue + delta * 10) % 360;
 
@@ -575,16 +735,36 @@ export const uiRenderMenu = (delta: number) => {
 
   ctx.scale(scale, scale);
 
-  ctxSetGlobalAlpha(0.5);
-  ctxSetFillStyle('#000');
-  ctx.fillRect(-250, -200, 500, 300);
-  ctx.fillRect(-250, 150, 500, 75);
+  ctxSetFillStyle('#00000088');
+  ctx.strokeStyle = `hsl(${gTextHue}, 100%, 60%)`;
+  ctx.lineWidth = 6;
+  if (isPortrait) {
+    ctx.fillRect(-150, -180, 300, 280);
+    ctx.fillRect(-150, 128, 300, 80);
+    ctx.strokeRect(-150, -180, 300, 280);
+    ctx.strokeRect(-150, 128, 300, 80);
 
-  racerRender(
-    Game.mPlayerRacer,
-    ctx,
-    -5, 35, 0, racerAngle, 10, 1
-  );
+    racerRender(
+      Game.mPlayerRacer,
+      ctx,
+      -5, 15, 0, racerAngle,
+      10 * 0.8, 1
+    );
+  } else {
+    ctx.fillRect(-250, -200, 500, 300);
+    ctx.fillRect(-250, 150, 500, 75);
+    ctx.strokeRect(-250, -200, 500, 300);
+    ctx.strokeRect(-250, 150, 500, 75);
+
+    racerRender(
+      Game.mPlayerRacer,
+      ctx,
+      -5, 35, 0, racerAngle,
+      10, 1
+    );
+  }
+
+  ctxSetGlobalAlpha(0.5);
 
   ctx.strokeStyle = '#8888';
   ctx.lineWidth = 1;
@@ -600,36 +780,59 @@ export const uiRenderMenu = (delta: number) => {
 
   ctxFillText(Game.mPlayerRacer.mData[0], 0, 142);
 
-  ctxSetFillStyle((Game.mDifficulty === 0) ? `hsl(${gTextHue}, 100%, 85%)` : '#fff');
-  ctxFillText('Easy', -120, 270);
-  ctxSetFillStyle((Game.mDifficulty === 1) ? `hsl(${gTextHue}, 100%, 85%)` : '#fff');
-  ctxFillText('Normal', 0, 270);
-  ctxSetFillStyle((Game.mDifficulty === 2) ? `hsl(${gTextHue}, 100%, 85%)` : '#fff');
-  ctxFillText('Hard', 120, 270);
-  ctxSetFillStyle('#fff');
+  if (isPortrait) {
+    ctxSetFillStyle((Game.mDifficulty === 0) ? `hsl(${gTextHue}, 100%, 85%)` : '#fff');
+    ctxFillText('Easy', 0, 225);
+    ctxSetFillStyle((Game.mDifficulty === 1) ? `hsl(${gTextHue}, 100%, 85%)` : '#fff');
+    ctxFillText('Normal', 0, 250);
+    ctxSetFillStyle((Game.mDifficulty === 2) ? `hsl(${gTextHue}, 100%, 85%)` : '#fff');
+    ctxFillText('Hard', 0, 275);
+    ctxSetFillStyle('#fff');
+  } else {
+    ctxSetFillStyle((Game.mDifficulty === 0) ? `hsl(${gTextHue}, 100%, 85%)` : '#fff');
+    ctxFillText('Easy', -120, 270);
+    ctxSetFillStyle((Game.mDifficulty === 1) ? `hsl(${gTextHue}, 100%, 85%)` : '#fff');
+    ctxFillText('Normal', 0, 270);
+    ctxSetFillStyle((Game.mDifficulty === 2) ? `hsl(${gTextHue}, 100%, 85%)` : '#fff');
+    ctxFillText('Hard', 120, 270);
+    ctxSetFillStyle('#fff');
+  }
 
-  const translateY = (gSelection === 0) ? 15 : 264;
-
-  ctx.translate(200, translateY);
-  ctxBeginPath();
-  ctxMoveTo(0, -20);
-  ctxLineTo(20, 0);
-  ctxLineTo(0, 20);
-  ctxClosePathAndFill();
-
-  ctx.translate(-400, 0);
-  ctxBeginPath();
-  ctxMoveTo(0, -20);
-  ctxLineTo(-20, 0);
-  ctxLineTo(0, 20);
-  ctxClosePathAndFill();
-
-  ctx.translate(200, -translateY);
-
+  const titleHeightOffset = isPortrait ? -142 : -150;
   uiSetFont(42);
   ctx.strokeStyle = '#888';
-  ctxFillText('Rainbow GP', 0, -150);
-  ctx.strokeText('Rainbow GP', 0, -150);
+  ctxFillText('Rainbow GP', 0, titleHeightOffset);
+  ctx.strokeText('Rainbow GP', 0, titleHeightOffset);
+
+  if (isPortrait) {
+    ctx.translate(110, 15);
+    ctxBeginPath();
+    ctxMoveTo(0, -20);
+    ctxLineTo(20, 0);
+    ctxLineTo(0, 20);
+    ctxClosePathAndFill();
+
+    ctx.translate(-220, 0);
+    ctxBeginPath();
+    ctxMoveTo(0, -20);
+    ctxLineTo(-20, 0);
+    ctxLineTo(0, 20);
+    ctxClosePathAndFill();
+  } else {
+    ctx.translate(200, (gSelection === 0) ? 15 : 264);
+    ctxBeginPath();
+    ctxMoveTo(0, -20);
+    ctxLineTo(20, 0);
+    ctxLineTo(0, 20);
+    ctxClosePathAndFill();
+
+    ctx.translate(-400, 0);
+    ctxBeginPath();
+    ctxMoveTo(0, -20);
+    ctxLineTo(-20, 0);
+    ctxLineTo(0, 20);
+    ctxClosePathAndFill();
+  }
 
   if (gUIControlValue2) {
     gUIControlValue1 += delta;
