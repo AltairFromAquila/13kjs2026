@@ -11,6 +11,8 @@ import { uiCalculateResults, uiFadeIn, uiRenderGame, uiRenderMenu, uiReset, uiSe
 import { controllerProcessAIForRacer, controllerProcessPlayerInput, controllerSetupPlayerInput } from "./game/controllers";
 import { collisionActivateEntity } from "./game/collision";
 import { kTerrainWidth } from "./game/terrain";
+import { audioPlay, generateMusic } from "./core/audio";
+import { exampleMusic } from "./data/audio.data";
 
 const kTargetTickTime = 1/120;
 
@@ -281,4 +283,6 @@ export const gameInit = () => {
 
   // gameGoToTrack(0);
   gameGoToMenu();
+
+  audioPlay(generateMusic(exampleMusic), 1, 0, 1, true);
 }

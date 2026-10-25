@@ -15,6 +15,7 @@ import { kMathTau, mathAbs, mathCos, mathJs, mathMax, mathMin, mathRandom, mathS
 export const zzfxVolume = .3; // volume
 export const zzfxCtx = new AudioContext; // audio context
 export const zzfxSampleRate = 44100;
+
 export const zzfxSample = // generate sample
   (
     volume = 1,
@@ -51,7 +52,7 @@ export const zzfxSample = // generate sample
       crush = 0,     // bit crush offset 
       jump = 1,      // pitch jump timer
       length,        // sample length
-      b = [],        // sample buffer
+      b = [] as number[],        // sample buffer
       t = 0,         // sample time
       i = 0,         // sample index 
       s = 0,         // sample value
@@ -134,9 +135,12 @@ export const zzfxSample = // generate sample
       }
     }
 
-    // copy samples to buffer and play
-    const buffer = zzfxCtx.createBuffer(1, b.length, zzfxSampleRate);
-    buffer.getChannelData(0).set(b)
-
-    return buffer;
+    return b;
   }
+
+export const zzfxBuffer = (sample: number[]) => {
+  const buffer = zzfxCtx.createBuffer(1, sample.length, zzfxSampleRate);
+  buffer.getChannelData(0).set(sample);
+
+  return buffer;
+}
